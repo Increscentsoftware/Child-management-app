@@ -157,21 +157,24 @@ export default function Layout() {
             icon: Icon,
             label,
           }) => {
-
-            let active = false
+ let active = false
 
 if (path === '/') {
   active = pathname === '/'
-} else if (path === '/children') {
+}
+
+else if (path === '/children') {
   active =
     pathname.startsWith('/children') &&
     pathname !== '/children/add'
-} else if (path === '/children/add') {
+}
+
+else if (path === '/children/add') {
   active = pathname === '/children/add'
-} else {
-  active =
-    pathname === path ||
-    pathname.startsWith(path)
+}
+
+else {
+  active = pathname === path
 }
 
             return (

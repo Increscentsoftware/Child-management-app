@@ -83,7 +83,7 @@ export default function ChildrenListPage() {
   const [advancedResults, setAdvancedResults] = useState<Child[] | null>(null)
 
   const children = useLiveQuery(() =>
-    db.children.where('is_active').equals(1).sortBy('full_name')
+    db.children.filter(c => !!c.is_active).sortBy('full_name')
   ) ?? []
 
   const handleAdvancedSearch = async (filters: AdvancedFilter) => {

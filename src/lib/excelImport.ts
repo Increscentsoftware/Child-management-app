@@ -1,70 +1,14 @@
 import * as XLSX from 'xlsx'
-import type { Child, AnnualFollowup, FatherStatus, MotherStatus } from '@/types'
+import type {
+  Child,
+  AnnualFollowup,
+  FatherStatus,
+  MotherStatus,
+} from '@/types'
 
-// Column label to field mapping (matches your existing Excel format)
-const FIELD_MAP: Record<string, keyof Child> = {
-  'school id'             : 'school_id',
-  'admission date'        : 'admission_date',
-  'date of admission'     : 'admission_date',
-  "child's name"          : 'full_name',
-  'name of the child'     : 'full_name',
-  'full name'             : 'full_name',
-  'date of birth'         : 'date_of_birth',
-  'dob'                   : 'date_of_birth',
-  'sex'                   : 'sex',
-  'gender'                : 'sex',
-  'religion'              : 'religion',
-  'mother tongue'         : 'mother_tongue',
-  'present class'         : 'present_class',
-  'class'                 : 'present_class',
-  'category'              : 'category',
-  'aadhar no'             : 'aadhar_no',
-  'normal / special'      : 'normal_or_special',
-
-  "father's name"         : 'father_name',
-  'father name'           : 'father_name',
-  'father status'         : 'father_status',
-  'father nature of work' : 'father_occupation',
-  'father occupation'     : 'father_occupation',
-  'father habits'         : 'father_habits',
-  'father health'         : 'father_health',
-  'father dv'             : 'father_dv',
-  'domestic violence (f)' : 'father_dv',
-  'father income'         : 'father_earnings',
-  'father avg income'     : 'father_earnings',
-  'father earnings'       : 'father_earnings',
-
-  "mother's name"         : 'mother_name',
-  'mother name'           : 'mother_name',
-  'mother status'         : 'mother_status',
-  'mother nature of work' : 'mother_occupation',
-  'mother occupation'     : 'mother_occupation',
-  'mother habits'         : 'mother_habits',
-  'mother health'         : 'mother_health',
-  'mother dv'             : 'mother_dv',
-  'domestic violence (m)' : 'mother_dv',
-  'mother income'         : 'mother_earnings',
-  'mother avg income'     : 'mother_earnings',
-  'mother earnings'       : 'mother_earnings',
-
-  'sibling name'          : 'sibling_name',
-  'sibling age'           : 'sibling_age',
-  'sibling sex'           : 'sibling_sex',
-  'sibling education'     : 'sibling_education',
-
-  'no of dependents'      : 'num_dependents',
-  'number of dependents'  : 'num_dependents',
-  'debts'                 : 'debts',
-  'area'                  : 'area',
-  'slum / village'        : 'area',
-  'rent'                  : 'rent_per_month',
-  'advance'               : 'advance_paid',
-  'special remarks'       : 'special_remarks',
-  'remarks'               : 'special_remarks',
-}
-
-// Year columns to detect (On Admission + annual follow-ups)
-const YEAR_PATTERN = /^(on admission|\d{4}[-–]\d{2,4}|\d{4}-\d{2})$/i
+// ============================================================
+// TYPES
+// ============================================================
 
 export interface ImportResult {
   children: Child[]
@@ -74,58 +18,150 @@ export interface ImportResult {
   imported: number
 }
 
-export async function importExcelFile(file: File): Promise<ImportResult> {
-  const buffer = await file.arrayBuffer()
-  const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
-  const errors: string[] = []
+// ============================================================
+// MAIN IMPORT
+// ============================================================
+
+export async function importExcelFile(
+  file: File
+): Promise<ImportResult> {
+
+  const buffer =
+    await file.arrayBuffer()
+
+  const workbook = XLSX.read(
+    buffer,
+    {
+      type: 'array',
+      cellDates: true,
+    }
+  )
+
   const children: Child[] = []
-  const followups: AnnualFollowup[] = []
 
-  for (const sheetName of wb.SheetNames) {
-    const ws = wb.Sheets[sheetName]
-    const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' })
+  const followups:
+    AnnualFollowup[] = []
 
-    if (rows.length < 2) continue
+  const errors: string[] = []
 
-    // Find header row (row with 'field' or 'particulars' or school id)
-    let headerRowIdx = 0
-    for (let i = 0; i < Math.min(5, rows.length); i++) {
-      const rowLower = rows[i].map(c => String(c).toLowerCase())
-      if (rowLower.some(c => c.includes('field') || c.includes('particular') || c.includes('school id') || c.includes("child's name"))) {
-        headerRowIdx = i
-        break
+  for (const sheetName of workbook.SheetNames) {
+
+    const sheet =
+      workbook.Sheets[sheetName]
+
+    const rows: string[][] =
+      XLSX.utils.sheet_to_json(
+        sheet,
+        {
+          header: 1,
+          raw: false,
+          defval: '',
+        }
+      )
+
+    if (!rows.length) continue
+
+    // ========================================================
+    // FIND YEAR COLUMNS
+    // ========================================================
+
+    const yearCols: {
+      label: string
+      colIdx: number
+    }[] = []
+
+    for (
+      let r = 0;
+      r < Math.min(5, rows.length);
+      r++
+    ) {
+
+      for (
+        let c = 1;
+        c < rows[r].length;
+        c++
+      ) {
+
+        const value = String(
+          rows[r][c] || ''
+        )
+          .trim()
+
+        if (!value) continue
+
+        if (
+          value
+            .toLowerCase()
+            .includes('admission')
+        ) {
+
+          yearCols.push({
+            label: value,
+            colIdx: c,
+          })
+        }
+
+        else if (
+          /\d{4}\s*[-/]\s*\d{2,4}/
+            .test(value)
+        ) {
+
+          yearCols.push({
+            label: value,
+            colIdx: c,
+          })
+        }
       }
     }
 
-    const headers = rows[headerRowIdx].map(h => String(h).trim())
-    const dataRows = rows.slice(headerRowIdx + 1)
+    console.log(
+      'YEAR COLS',
+      yearCols
+    )
 
-    // Detect format: wide (one column per year) vs. tall (one row per child)
-    const yearCols: { label: string; colIdx: number }[] = []
-    headers.forEach((h, i) => {
-      if (YEAR_PATTERN.test(h.trim())) {
-        yearCols.push({ label: h.trim(), colIdx: i })
-      }
-    })
+    if (!yearCols.length) {
+      errors.push(
+        `${sheetName}: No year columns found`
+      )
 
-    if (yearCols.length > 0) {
-      // WIDE FORMAT: SSR-style — rows are fields, columns are years
-      const fieldCol = 0
-      const child = buildChildFromWide(rows, headerRowIdx, yearCols, file.name, errors)
-      if (child) {
-        children.push(child)
-        // Each year column = one follow-up
-        for (const yc of yearCols) {
-          const fu = buildFollowupFromWide(rows, headerRowIdx, yc, child.id, errors)
-          if (fu) followups.push(fu)
-        }
+      continue
+    }
+
+    const child =
+      buildChildFromWide(
+        rows,
+        yearCols,
+        file.name,
+        errors
+      )
+
+    if (!child) continue
+
+    children.push(child)
+
+    // ========================================================
+    // FOLLOWUPS
+    // ========================================================
+
+    for (const yc of yearCols) {
+
+      if (
+        yc.label
+          .toLowerCase()
+          .includes('admission')
+      ) {
+        continue
       }
-    } else {
-      // TALL FORMAT: one row per child (Excel report style)
-      for (const row of dataRows) {
-        if (row.every(c => !c)) continue
-        const child = buildChildFromTall(headers, row, file.name, errors)
-        if (child) children.push(child)
+
+      const fu =
+        buildFollowupFromWide(
+          rows,
+          yc,
+          child.id
+        )
+
+      if (fu) {
+        followups.push(fu)
       }
     }
   }
@@ -135,148 +171,508 @@ export async function importExcelFile(file: File): Promise<ImportResult> {
     followups,
     errors,
     total: children.length,
-    imported: children.length
+    imported: children.length,
   }
 }
 
+// ============================================================
+// BUILD CHILD
+// ============================================================
+
 function buildChildFromWide(
   rows: string[][],
-  headerRowIdx: number,
-  yearCols: { label: string; colIdx: number }[],
+  yearCols: {
+    label: string
+    colIdx: number
+  }[],
   sourceFile: string,
   errors: string[]
 ): Child | null {
-  // Use the LAST (most recent) year column as the current record
-  const latestCol = yearCols[yearCols.length - 1]
-  const fieldMap: Record<string, string> = {}
 
-  for (let r = headerRowIdx + 1; r < rows.length; r++) {
-    const fieldLabel = String(rows[r][0] || '').trim().toLowerCase()
-    const value = String(rows[r][latestCol.colIdx] || '').trim()
-    if (fieldLabel) fieldMap[fieldLabel] = value
-  }
+  const admissionCol =
+    yearCols.find(y =>
+      y.label
+        .toLowerCase()
+        .includes('admission')
+    ) || yearCols[0]
 
   const child: Partial<Child> = {
+
     id: crypto.randomUUID(),
+
     source_file: sourceFile,
-    imported_at: new Date().toISOString(),
+
+    imported_at:
+      new Date().toISOString(),
+
     is_active: true,
+
     father_dv: false,
+
+    mother_dv: false,
+
+    father_extramarital: false,
+
+    mother_extramarital: false,
+
     father_status: 'Alive',
+
     mother_status: 'Alive',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+
+    created_at:
+      new Date().toISOString(),
+
+    updated_at:
+      new Date().toISOString(),
   }
 
-  for (const [label, value] of Object.entries(fieldMap)) {
-    const key = matchField(label)
-    if (key && value) {
-      if (key === 'father_dv' || key === 'mother_dv') {
-        (child as Record<string, unknown>)[key] = value.toLowerCase().includes('yes')
-      } else {
-        (child as Record<string, unknown>)[key] = value
+  let currentSection = 'child'
+
+  for (
+    let r = 0;
+    r < rows.length;
+    r++
+  ) {
+
+    const rawLabel = String(
+      rows[r][0] || ''
+    ).trim()
+
+    const label = rawLabel
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim()
+
+    let value = String(
+      rows[r][admissionCol.colIdx] || ''
+    ).trim()
+
+    // ========================================================
+    // FALLBACK SEARCH
+    // ========================================================
+
+    if (!value) {
+
+      for (
+        let c = admissionCol.colIdx + 1;
+        c < rows[r].length;
+        c++
+      ) {
+
+        const alt = String(
+          rows[r][c] || ''
+        ).trim()
+
+        if (alt) {
+          value = alt
+          break
+        }
+      }
+    }
+
+    if (!label) continue
+
+    console.log(
+      'ROW:',
+      r,
+      'LABEL:',
+      label,
+      'VALUE:',
+      value
+    )
+
+    // ========================================================
+    // SECTION DETECTION
+    // ========================================================
+
+    if (label === 'father') {
+      currentSection = 'father'
+      continue
+    }
+
+    if (label === 'mother') {
+      currentSection = 'mother'
+      continue
+    }
+
+    if (
+      label.includes('siblings')
+    ) {
+      currentSection = 'sibling'
+      continue
+    }
+
+    if (
+      label.includes('financial')
+    ) {
+      currentSection = 'financial'
+      continue
+    }
+
+    if (
+      label.includes(
+        'living conditions'
+      )
+    ) {
+      currentSection = 'living'
+      continue
+    }
+
+    // ========================================================
+    // CHILD
+    // ========================================================
+
+    if (
+      label.includes('school id')
+    ) {
+      child.school_id = value
+    }
+
+    else if (
+      label.includes(
+        'name of the child'
+      )
+    ) {
+      child.full_name = value
+    }
+
+    else if (
+      label === 'date'
+    ) {
+      child.admission_date =
+        value
+    }
+
+    else if (
+      label.includes(
+        'date of birth'
+      )
+    ) {
+      child.date_of_birth =
+        value
+    }
+
+    else if (
+      label === 'sex'
+    ) {
+      child.sex = value as
+        | 'Male'
+        | 'Female'
+        | 'Other'
+    }
+
+    else if (
+      label.includes(
+        'present class'
+      )
+    ) {
+      child.present_class =
+        value
+    }
+
+    // ========================================================
+    // FATHER
+    // ========================================================
+
+    else if (
+      currentSection ===
+      'father'
+    ) {
+
+      if (
+        label.includes('dead') ||
+        label.includes('alive')
+      ) {
+
+        child.father_status =
+          value as FatherStatus
+      }
+
+      else if (
+        label.includes(
+          'nature of work'
+        )
+      ) {
+
+        child.father_occupation =
+          value
+      }
+
+      else if (
+        label.includes('habit')
+      ) {
+
+        child.father_habits =
+          value
+      }
+
+      else if (
+        label.includes(
+          'domestic violence'
+        )
+      ) {
+
+        child.father_dv =
+          value
+            .toLowerCase()
+            .includes('yes')
+      }
+
+      else if (
+        label.includes('health')
+      ) {
+
+        child.father_health =
+          value
+      }
+    }
+
+    // ========================================================
+    // MOTHER
+    // ========================================================
+
+    else if (
+      currentSection ===
+      'mother'
+    ) {
+
+      if (
+        label.includes('dead') ||
+        label.includes('alive')
+      ) {
+
+        child.mother_status =
+          value as MotherStatus
+      }
+
+      else if (
+        label.includes(
+          'nature of work'
+        )
+      ) {
+
+        child.mother_occupation =
+          value
+      }
+
+      else if (
+        label.includes('habit')
+      ) {
+
+        child.mother_habits =
+          value
+      }
+
+      else if (
+        label.includes(
+          'domestic violence'
+        )
+      ) {
+
+        child.mother_dv =
+          value
+            .toLowerCase()
+            .includes('yes')
+      }
+
+      else if (
+        label.includes('health')
+      ) {
+
+        child.mother_health =
+          value
+      }
+    }
+
+    // ========================================================
+    // FINANCIAL
+    // ========================================================
+
+    else if (
+      currentSection ===
+      'financial'
+    ) {
+
+      if (
+        label.includes(
+          'income father'
+        )
+      ) {
+
+        child.avg_income_father =
+          value
+      }
+
+      else if (
+        label.includes(
+          'income mother'
+        )
+      ) {
+
+        child.avg_income_mother =
+          value
+      }
+
+      else if (
+        label.includes(
+          'other income'
+        )
+      ) {
+
+        child.other_income =
+          value
+      }
+
+      else if (
+        label.includes(
+          'dependents'
+        )
+      ) {
+
+        child.num_dependents =
+          value
+      }
+
+      else if (
+        label.includes('debt')
+      ) {
+
+        child.debts = value
       }
     }
   }
 
-  if (!child.full_name && !child.school_id) {
-    errors.push(`Skipped row in wide format — no name or school ID found`)
+  // ========================================================
+  // VALIDATION
+  // ========================================================
+
+  if (
+    !child.school_id ||
+    !child.full_name
+  ) {
+
+    errors.push(
+      `Skipped file ${sourceFile} — missing child name or school ID`
+    )
+
     return null
   }
 
   return child as Child
 }
 
+// ============================================================
+// FOLLOWUPS
+// ============================================================
+
 function buildFollowupFromWide(
   rows: string[][],
-  headerRowIdx: number,
-  yearCol: { label: string; colIdx: number },
-  childId: string,
-  _errors: string[]
+  yearCol: {
+    label: string
+    colIdx: number
+  },
+  childId: string
 ): AnnualFollowup | null {
-  const fu: Partial<AnnualFollowup> = {
+
+  const fu:
+    Partial<AnnualFollowup> = {
+
     id: crypto.randomUUID(),
+
     child_id: childId,
-    year_label: yearCol.label,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+
+    year_label:
+      yearCol.label,
+
+    created_at:
+      new Date().toISOString(),
+
+    updated_at:
+      new Date().toISOString(),
   }
 
-  for (let r = headerRowIdx + 1; r < rows.length; r++) {
-    const fieldLabel = String(rows[r][0] || '').trim().toLowerCase()
-    const value = String(rows[r][yearCol.colIdx] || '').trim()
-    if (!fieldLabel || !value) continue
+  for (
+    let r = 0;
+    r < rows.length;
+    r++
+  ) {
 
-    if (fieldLabel.includes('class')) fu.present_class = value
-    else if (fieldLabel.includes('father') && fieldLabel.includes('status')) fu.father_status = value as FatherStatus
-    else if (fieldLabel.includes('father') && fieldLabel.includes('work')) fu.father_occupation = value
-    else if (fieldLabel.includes('father') && fieldLabel.includes('earn')) fu.father_earnings = value
-    else if (fieldLabel.includes('father') && fieldLabel.includes('habit')) fu.father_habits = value
-    else if (fieldLabel.includes('father') && fieldLabel.includes('health')) fu.father_health = value
-    else if (fieldLabel.includes('father') && fieldLabel.includes('dv')) fu.father_dv = value.toLowerCase().includes('yes')
-    else if (fieldLabel.includes('mother') && fieldLabel.includes('status')) fu.mother_status = value as MotherStatus
-    else if (fieldLabel.includes('mother') && fieldLabel.includes('work')) fu.mother_occupation = value
-    else if (fieldLabel.includes('mother') && fieldLabel.includes('earn')) fu.mother_earnings = value
-    else if (fieldLabel.includes('mother') && fieldLabel.includes('health')) fu.mother_health = value
-    else if (fieldLabel.includes('remark')) fu.special_remarks = value
-    else if (fieldLabel.includes('social worker') || fieldLabel.includes('sw name')) fu.recorded_by_name = value
-    else if (fieldLabel.includes('rent')) fu.rent_per_month = value
-    else if (fieldLabel.includes('dependent')) fu.num_dependents = value
-    else if (fieldLabel.includes('debt')) fu.debts = value
+    const label = String(
+      rows[r][0] || ''
+    )
+      .toLowerCase()
+      .trim()
+
+    const value = String(
+      rows[r][yearCol.colIdx] || ''
+    ).trim()
+
+    if (!label || !value)
+      continue
+
+    if (
+      label.includes(
+        'present class'
+      )
+    ) {
+      fu.present_class =
+        value
+    }
+
+    else if (
+      label.includes(
+        'father'
+      ) &&
+      (
+        label.includes(
+          'alive'
+        ) ||
+        label.includes(
+          'dead'
+        )
+      )
+    ) {
+
+      fu.father_status =
+        value as FatherStatus
+    }
+
+    else if (
+      label.includes(
+        'mother'
+      ) &&
+      (
+        label.includes(
+          'alive'
+        ) ||
+        label.includes(
+          'dead'
+        )
+      )
+    ) {
+
+      fu.mother_status =
+        value as MotherStatus
+    }
+
+    else if (
+      label.includes(
+        'remark'
+      )
+    ) {
+
+      fu.special_remarks =
+        value
+    }
   }
 
   return fu as AnnualFollowup
 }
 
-function buildChildFromTall(
-  headers: string[],
-  row: string[],
-  sourceFile: string,
-  errors: string[]
-): Child | null {
-  const child: Partial<Child> = {
-    id: crypto.randomUUID(),
-    source_file: sourceFile,
-    is_active: true,
-    father_dv: false,
-    father_status: 'Alive',
-    mother_status: 'Alive',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }
+// ============================================================
+// CHANGE LOG
+// ============================================================
 
-  headers.forEach((h, i) => {
-    const value = String(row[i] || '').trim()
-    if (!value) return
-    const key = matchField(h.toLowerCase())
-    if (key) {
-      if (key === 'father_dv' || key === 'mother_dv') {
-        (child as Record<string, unknown>)[key] = value.toLowerCase().includes('yes')
-      } else {
-        (child as Record<string, unknown>)[key] = value
-      }
-    }
-  })
-
-  if (!child.full_name && !child.school_id) {
-    errors.push(`Skipped row — no name or ID in row: ${row.slice(0, 3).join(', ')}`)
-    return null
-  }
-
-  return child as Child
-}
-
-function matchField(label: string): keyof Child | null {
-  const cleaned = label.trim().toLowerCase().replace(/[^a-z0-9 /()]/g, '')
-  if (FIELD_MAP[cleaned]) return FIELD_MAP[cleaned]
-  // Fuzzy match
-  for (const [key, field] of Object.entries(FIELD_MAP)) {
-    if (cleaned.includes(key) || key.includes(cleaned)) return field
-  }
-  return null
-}
-
-// Detect what changed between old child and new followup data, return change log entries
 export function detectChanges(
   childId: string,
   childName: string,
@@ -286,51 +682,77 @@ export function detectChanges(
   followupId: string,
   yearLabel: string
 ) {
-  const changes: Array<{
-    id: string
-    child_id: string
-    child_name: string
-    field_name: string
-    old_value: string
-    new_value: string
-    changed_by_name: string
-    followup_id: string
-    followup_year: string
-    changed_at: string
-  }> = []
 
-  const WATCH: Array<[keyof AnnualFollowup, keyof Child, string]> = [
-    ['father_status', 'father_status', 'Father status'],
-    ['father_health', 'father_health', 'Father health'],
-    ['father_habits', 'father_habits', 'Father habits'],
-    ['father_earnings', 'father_earnings', 'Father income'],
-    ['father_occupation', 'father_occupation', 'Father occupation'],
-    ['father_dv', 'father_dv', 'Domestic violence (Father)'],
-    ['mother_status', 'mother_status', 'Mother status'],
-    ['mother_health', 'mother_health', 'Mother health'],
-    ['mother_occupation', 'mother_occupation', 'Mother occupation'],
-    ['mother_earnings', 'mother_earnings', 'Mother income'],
-    ['present_class', 'present_class', 'Child class'],
-    ['num_dependents', 'num_dependents', 'No. of dependents'],
-    ['debts', 'debts', 'Debts'],
-    ['rent_per_month', 'rent_per_month', 'Rent'],
+  const changes: any[] = []
+
+  const fields = [
+    [
+      'father_status',
+      'father_status',
+      'Father status',
+    ],
+
+    [
+      'mother_status',
+      'mother_status',
+      'Mother status',
+    ],
+
+    [
+      'present_class',
+      'present_class',
+      'Class',
+    ],
   ]
 
-  for (const [fuKey, childKey, label] of WATCH) {
-    const oldVal = String(oldData[childKey] ?? '')
-    const newVal = String(newData[fuKey] ?? '')
-    if (newVal && oldVal !== newVal) {
+  for (const [
+    fuKey,
+    childKey,
+    label,
+  ] of fields) {
+
+    const oldVal = String(
+      oldData[
+        childKey as keyof Child
+      ] ?? ''
+    )
+
+    const newVal = String(
+      newData[
+        fuKey as keyof AnnualFollowup
+      ] ?? ''
+    )
+
+    if (
+      newVal &&
+      oldVal !== newVal
+    ) {
+
       changes.push({
         id: crypto.randomUUID(),
+
         child_id: childId,
+
         child_name: childName,
+
         field_name: label,
-        old_value: oldVal || '—',
+
+        old_value:
+          oldVal || '—',
+
         new_value: newVal,
-        changed_by_name: swName,
-        followup_id: followupId,
-        followup_year: yearLabel,
-        changed_at: new Date().toISOString(),
+
+        changed_by_name:
+          swName,
+
+        followup_id:
+          followupId,
+
+        followup_year:
+          yearLabel,
+
+        changed_at:
+          new Date().toISOString(),
       })
     }
   }
