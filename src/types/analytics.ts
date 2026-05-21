@@ -1,5 +1,7 @@
 // Enhanced types for analytics features
 
+import type { Child } from '@/types'
+
 export interface AcademicPerformance {
   id: string
   child_id: string

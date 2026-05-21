@@ -1,7 +1,7 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAppStore } from '@/lib/store'
 import {
-  LayoutDashboard, Users, PlusCircle, Clock, FileUp, Wifi, WifiOff
+  Home, LayoutDashboard, Users, PlusCircle, Clock, FileUp, Wifi, WifiOff
 } from 'lucide-react'
 
 const NAV = [
@@ -18,11 +18,7 @@ export default function Layout() {
   const { isOnline, pendingSync } = useAppStore()
 
   return (
-    <div style={{
-      maxWidth: 480, margin: '0 auto', minHeight: '100dvh',
-      display: 'flex', flexDirection: 'column',
-      background: '#fff', fontFamily: "'DM Sans', system-ui, sans-serif"
-    }}>
+    <div className="app-layout" style={{ minHeight: '100dvh' }}>
       {/* Sync banner */}
       {!isOnline && (
         <div style={{
@@ -46,26 +42,32 @@ export default function Layout() {
       )}
 
       {/* Page content */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div className="top-bar">
+        <button
+          onClick={() => navigate('/')}
+          className="home-button"
+        >
+          <Home size={18} />
+          Home
+        </button>
+      </div>
+
+      <div className="content-area">
         <Outlet />
       </div>
 
       {/* Bottom nav */}
-      <nav style={{
-        display: 'flex', borderTop: '0.5px solid #e5e5e5',
-        background: '#fff', position: 'sticky', bottom: 0, zIndex: 50
-      }}>
+      <nav className="bottom-nav">
         {NAV.map(({ path, icon: Icon, label }) => {
           const active = pathname === path || (path !== '/' && pathname.startsWith(path) && path !== '/children/add')
           return (
-            <button key={path} onClick={() => navigate(path)} style={{
-              flex: 1, padding: '8px 4px 6px', border: 'none', background: 'none',
-              cursor: 'pointer', fontSize: 10, fontFamily: 'inherit',
-              color: active ? '#1a6b4a' : '#888', fontWeight: active ? 600 : 400,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3
-            }}>
-              <Icon size={17} />
-              {label}
+            <button
+              key={path}
+              onClick={() => navigate(path)}
+              className={`nav-button ${active ? 'nav-active' : ''}`}
+            >
+              <Icon size={18} />
+              <span>{label}</span>
             </button>
           )
         })}

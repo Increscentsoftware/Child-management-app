@@ -109,6 +109,8 @@ export interface Child {
 
   special_remarks?: string
   source_file?: string
+  imported_at?: string
+  data_json?: Record<string, unknown>
   created_by?: string
   created_at: string
   updated_at: string
@@ -129,13 +131,13 @@ export interface AnnualFollowup {
   child_height?: string
   child_weight?: string
   child_health?: string
-  father_status?: string
+  father_status?: FatherStatus
   father_occupation?: string
   father_earnings?: string
   father_habits?: string
   father_health?: string
   father_dv?: boolean
-  mother_status?: string
+  mother_status?: MotherStatus
   mother_occupation?: string
   mother_earnings?: string
   mother_health?: string

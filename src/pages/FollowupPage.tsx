@@ -83,7 +83,7 @@ export default function FollowupPage() {
     ]
     checks.forEach(([fuKey, childKey]) => {
       const newVal = String((watchAll as Record<string, unknown>)[fuKey] ?? '')
-      const oldVal = String((child as Record<string, unknown>)[childKey] ?? '')
+      const oldVal = String((child as unknown as Record<string, unknown>)[childKey] ?? '')
       if (newVal && newVal !== oldVal) changed.add(fuKey)
     })
     setChangedFields(changed)

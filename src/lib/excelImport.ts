@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import type { Child, AnnualFollowup } from '@/types'
+import type { Child, AnnualFollowup, FatherStatus, MotherStatus } from '@/types'
 
 // Column label to field mapping (matches your existing Excel format)
 const FIELD_MAP: Record<string, keyof Child> = {
@@ -208,13 +208,13 @@ function buildFollowupFromWide(
     if (!fieldLabel || !value) continue
 
     if (fieldLabel.includes('class')) fu.present_class = value
-    else if (fieldLabel.includes('father') && fieldLabel.includes('status')) fu.father_status = value
+    else if (fieldLabel.includes('father') && fieldLabel.includes('status')) fu.father_status = value as FatherStatus
     else if (fieldLabel.includes('father') && fieldLabel.includes('work')) fu.father_occupation = value
     else if (fieldLabel.includes('father') && fieldLabel.includes('earn')) fu.father_earnings = value
     else if (fieldLabel.includes('father') && fieldLabel.includes('habit')) fu.father_habits = value
     else if (fieldLabel.includes('father') && fieldLabel.includes('health')) fu.father_health = value
     else if (fieldLabel.includes('father') && fieldLabel.includes('dv')) fu.father_dv = value.toLowerCase().includes('yes')
-    else if (fieldLabel.includes('mother') && fieldLabel.includes('status')) fu.mother_status = value
+    else if (fieldLabel.includes('mother') && fieldLabel.includes('status')) fu.mother_status = value as MotherStatus
     else if (fieldLabel.includes('mother') && fieldLabel.includes('work')) fu.mother_occupation = value
     else if (fieldLabel.includes('mother') && fieldLabel.includes('earn')) fu.mother_earnings = value
     else if (fieldLabel.includes('mother') && fieldLabel.includes('health')) fu.mother_health = value
