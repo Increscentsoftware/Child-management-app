@@ -1,90 +1,126 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
-import { usePermissions } from '@/hooks/usePermissions'
-import type { SocialWorker } from '@/types'
-import { ArrowLeft, UserPlus, Trash2, Edit, X, Eye, EyeOff, Settings } from 'lucide-react'
+import { useAppStore } from '@/lib/store'
+import { 
+  Users, UserPlus, Edit2, Trash2, Eye, EyeOff, 
+  ArrowLeft, Shield, UserCheck, X 
+} from 'lucide-react'
 import toast from 'react-hot-toast'
+
+interface User {
+  id: string
+  email: string
+  full_name: string
+  role: 'admin' | 'field_worker'
+  phone?: string
+  area_assigned?: string
+  is_active: boolean
+  created_at: string
+}
 
 interface UserFormData {
   email: string
   password: string
   full_name: string
   employee_id: string
-  role: 'admin' | 'field_worker'
   phone: string
   area_assigned: string
+  role: 'admin' | 'field_worker'
 }
 
 export default function UserManagementPage() {
   const navigate = useNavigate()
-  const { canManageUsers } = usePermissions()
-  const [users, setUsers] = useState<SocialWorker[]>([])
+  const { user: currentUser } = useAppStore()
+  const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [editingUser, setEditingUser] = useState<SocialWorker | null>(null)
+  const [showModal, setShowModal] = useState(false)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
   const [showPassword, setShowPassword] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-
+  
   const [formData, setFormData] = useState<UserFormData>({
     email: '',
     password: '',
     full_name: '',
     employee_id: '',
-    role: 'field_worker',
     phone: '',
-    area_assigned: ''
+    area_assigned: '',
+    role: 'field_worker'
   })
 
   useEffect(() => {
-    if (!canManageUsers) {
-      toast.error('Access denied')
+    if (!currentUser || currentUser.role !== 'admin') {
       navigate('/')
+      toast.error('Admin access required')
       return
     }
     loadUsers()
-  }, [canManageUsers])
+  }, [currentUser])
 
   const loadUsers = async () => {
-    const { data, error } = await supabase
-      .from('social_workers')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (!error && data) setUsers(data)
-    setLoading(false)
+    try {
+      const { data, error } = await supabase
+        .from('social_workers')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setUsers(data || [])
+    } catch (error) {
+      console.error('Error loading users:', error)
+      toast.error('Failed to load users')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const resetForm = () => {
+  const handleOpenCreate = () => {
+    setEditingUser(null)
     setFormData({
       email: '',
       password: '',
       full_name: '',
       employee_id: '',
-      role: 'field_worker',
       phone: '',
-      area_assigned: ''
+      area_assigned: '',
+      role: 'field_worker'
     })
-    setEditingUser(null)
-    setShowForm(false)
+    setShowPassword(false)
+    setShowModal(true)
   }
 
-  const openEditForm = (user: SocialWorker) => {
+  const handleOpenEdit = (user: User) => {
     setEditingUser(user)
     setFormData({
-      email: user.id, // We'll use ID for edit, not email
-      password: '', // Password not needed for edit
+      email: user.email,
+      password: '',
       full_name: user.full_name,
-      employee_id: user.employee_id || '',
-      role: user.role as 'admin' | 'field_worker',
+      employee_id: user.id,
       phone: user.phone || '',
-      area_assigned: user.area_assigned || ''
+      area_assigned: user.area_assigned || '',
+      role: user.role
     })
-    setShowForm(true)
+    setShowPassword(false)
+    setShowModal(true)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSubmitting(true)
+
+    if (!formData.email || !formData.full_name) {
+      toast.error('Email and Full Name are required')
+      return
+    }
+
+    if (!editingUser && !formData.password) {
+      toast.error('Password is required for new users')
+      return
+    }
+
+    if (!editingUser && formData.password.length < 6) {
+      toast.error('Password must be at least 6 characters')
+      return
+    }
 
     try {
       if (editingUser) {
@@ -93,94 +129,102 @@ export default function UserManagementPage() {
           .from('social_workers')
           .update({
             full_name: formData.full_name,
-            employee_id: formData.employee_id,
-            role: formData.role,
             phone: formData.phone,
-            area_assigned: formData.area_assigned
+            area_assigned: formData.area_assigned,
+            role: formData.role
           })
           .eq('id', editingUser.id)
 
         if (error) throw error
         toast.success('User updated successfully')
       } else {
-        // Create new user
-        // Step 1: Create auth user
+        // Create new user in Supabase Auth
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
           options: {
             data: {
-              full_name: formData.full_name
+              full_name: formData.full_name,
+              role: formData.role
             }
           }
         })
 
         if (authError) throw authError
-        if (!authData.user) throw new Error('Failed to create user')
 
-        // Step 2: Create social worker record
-        const { error: workerError } = await supabase
-          .from('social_workers')
-          .insert({
-            id: authData.user.id,
-            full_name: formData.full_name,
-            employee_id: formData.employee_id,
-            role: formData.role,
-            phone: formData.phone,
-            area_assigned: formData.area_assigned,
-            is_active: true
-          })
+        if (authData.user) {
+          // Insert into social_workers table
+          const { error: dbError } = await supabase
+            .from('social_workers')
+            .insert({
+              id: authData.user.id,
+              email: formData.email,
+              full_name: formData.full_name,
+              phone: formData.phone,
+              area_assigned: formData.area_assigned,
+              role: formData.role,
+              is_active: true
+            })
 
-        if (workerError) throw workerError
-        toast.success('User created successfully. Check email for verification.')
+          if (dbError) throw dbError
+        }
+
+        toast.success('User created successfully')
       }
 
-      resetForm()
+      setShowModal(false)
       loadUsers()
     } catch (error: any) {
       console.error('Error:', error)
       toast.error(error.message || 'Failed to save user')
-    } finally {
-      setSubmitting(false)
     }
   }
 
-  const deleteUser = async (user: SocialWorker) => {
-    if (!confirm(`Delete ${user.full_name}? This cannot be undone.`)) return
+  const handleToggleActive = async (user: User) => {
+    try {
+      const { error } = await supabase
+        .from('social_workers')
+        .update({ is_active: !user.is_active })
+        .eq('id', user.id)
+
+      if (error) throw error
+      toast.success(`User ${!user.is_active ? 'activated' : 'deactivated'}`)
+      loadUsers()
+    } catch (error) {
+      toast.error('Failed to update user status')
+    }
+  }
+
+  const handleDelete = async (userId: string) => {
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return
 
     try {
-      // Delete from social_workers table
-      const { error: dbError } = await supabase
+      const { error } = await supabase
         .from('social_workers')
         .delete()
-        .eq('id', user.id)
+        .eq('id', userId)
 
-      if (dbError) throw dbError
-
-      // Note: Auth user deletion requires admin API
-      // For now, just deactivate instead
-      await supabase
-        .from('social_workers')
-        .update({ is_active: false })
-        .eq('id', user.id)
-
-      toast.success('User removed')
+      if (error) throw error
+      toast.success('User deleted successfully')
       loadUsers()
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Failed to delete user')
     }
   }
 
-  const toggleActive = async (id: string, isActive: boolean) => {
-    const { error } = await supabase
-      .from('social_workers')
-      .update({ is_active: !isActive })
-      .eq('id', id)
-    
-    if (!error) {
-      toast.success(isActive ? 'User deactivated' : 'User activated')
-      loadUsers()
-    }
+  if (loading) {
+    return (
+      <div style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        fontFamily: "'DM Sans', sans-serif",
+        background: '#f5f5f5'
+      }}>
+        <div style={{ fontSize: 16, color: '#888' }}>Loading...</div>
+      </div>
+    )
   }
 
   return (
@@ -189,232 +233,226 @@ export default function UserManagementPage() {
       <div style={{ 
         background: '#1a6b4a', 
         color: '#fff', 
-        padding: '14px 16px', 
-        display: 'flex', 
-        alignItems: 'center', 
-        gap: 12,
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        padding: '14px 16px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 10
       }}>
-        <button 
-          onClick={() => navigate('/')} 
-          style={{ 
-            background: 'none', 
-            border: 'none', 
-            color: '#fff', 
-            cursor: 'pointer', 
-            padding: 4,
-            display: 'flex',
-            alignItems: 'center'
-          }}
-        >
-          <ArrowLeft size={22} />
-        </button>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, fontSize: 17 }}>User Management</div>
-          <div style={{ fontSize: 12, opacity: 0.9 }}>
-            {users.filter(u => u.is_active).length} active · {users.length} total
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={() => navigate('/')}
+            style={{
+              background: 'rgba(255,255,255,0.2)',
+              border: 'none',
+              color: '#fff',
+              padding: 8,
+              borderRadius: 8,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+          >
+            <ArrowLeft size={20} />
+          </button>
+          
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 18 }}>User Management</div>
+            <div style={{ fontSize: 12, opacity: 0.9 }}>
+              {users.filter(u => u.is_active).length} active · {users.length} total
+            </div>
           </div>
-        </div>
-        <button 
-          onClick={() => {
-            resetForm()
-            setShowForm(true)
-          }} 
-          style={{
-            background: '#fff',
-            border: 'none',
-            color: '#1a6b4a',
-            borderRadius: 8,
-            padding: '8px 14px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: 13,
-            fontWeight: 600,
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-          }}
-        >
-          <UserPlus size={16} /> Add User
-        </button>
 
-        <button 
-          onClick={() => navigate('/admin/form-fields')} 
-          style={{
-            background: 'rgba(255,255,255,0.2)',
-            border: 'none',
-            color: '#fff',
-            borderRadius: 8,
-            padding: '8px 14px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: 13,
-            fontWeight: 600
-          }}
-        >
-          <Settings size={16} /> Form Fields
-        </button>
+          <button
+            onClick={handleOpenCreate}
+            style={{
+              background: '#fff',
+              border: 'none',
+              color: '#1a6b4a',
+              padding: '8px 14px',
+              borderRadius: 8,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontSize: 13,
+              fontWeight: 600,
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}
+          >
+            <UserPlus size={18} />
+            Add User
+          </button>
+        </div>
       </div>
 
       {/* User List */}
       <div style={{ padding: '16px 16px 100px' }}>
-        {loading ? (
+        {users.length === 0 ? (
           <div style={{ 
             textAlign: 'center', 
-            padding: 60, 
-            color: '#999' 
+            padding: 40, 
+            background: '#fff', 
+            borderRadius: 12,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
           }}>
-            <div style={{ fontSize: 14 }}>Loading users...</div>
-          </div>
-        ) : users.length === 0 ? (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: 60, 
-            color: '#999' 
-          }}>
-            <UserPlus size={48} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-            <div style={{ fontSize: 14 }}>No users found</div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>Click "Add User" to create one</div>
+            <Users size={48} style={{ color: '#ccc', margin: '0 auto 16px' }} />
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No users yet</div>
+            <div style={{ fontSize: 14, color: '#888', marginBottom: 16 }}>
+              Create your first user to get started
+            </div>
+            <button
+              onClick={handleOpenCreate}
+              style={{
+                background: '#1a6b4a',
+                color: '#fff',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontSize: 14,
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8
+              }}
+            >
+              <UserPlus size={16} />
+              Add First User
+            </button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {users.map(user => (
-              <div 
-                key={user.id} 
+              <div
+                key={user.id}
                 style={{
                   background: '#fff',
                   borderRadius: 12,
-                  padding: '14px 16px',
+                  padding: 16,
                   boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                  border: user.is_active ? '1px solid #e5e5e5' : '1px solid #f5e5e5'
+                  opacity: user.is_active ? 1 : 0.6,
+                  transition: 'all 0.2s'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
                   {/* Avatar */}
                   <div style={{
-                    width: 44,
-                    height: 44,
+                    width: 48,
+                    height: 48,
                     borderRadius: '50%',
-                    background: user.role === 'admin' ? '#fef3c7' : '#dbeafe',
+                    background: user.role === 'admin' ? 
+                      'linear-gradient(135deg, #dc2626, #b91c1c)' : 
+                      'linear-gradient(135deg, #1a6b4a, #15563c)',
+                    color: '#fff',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: 16,
-                    fontWeight: 600,
-                    color: user.role === 'admin' ? '#d97706' : '#2563eb',
-                    flexShrink: 0
+                    fontWeight: 700,
+                    fontSize: 18,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
                   }}>
-                    {user.full_name.charAt(0).toUpperCase()}
+                    {user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                   </div>
 
                   {/* User Info */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ 
-                      fontSize: 15, 
-                      fontWeight: 600, 
-                      color: '#111',
-                      marginBottom: 4
-                    }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 2 }}>
                       {user.full_name}
                     </div>
-                    
-                    <div style={{ 
-                      fontSize: 12, 
-                      color: '#666',
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: 8,
-                      marginBottom: 6
-                    }}>
-                      {user.employee_id && (
-                        <span>ID: {user.employee_id}</span>
-                      )}
-                      <span style={{
-                        background: user.role === 'admin' ? '#fef3c7' : '#dbeafe',
-                        color: user.role === 'admin' ? '#d97706' : '#2563eb',
-                        padding: '2px 8px',
-                        borderRadius: 4,
-                        fontSize: 11,
-                        fontWeight: 600
-                      }}>
-                        {user.role === 'admin' ? 'ADMIN' : 'USER'}
-                      </span>
-                    </div>
-
-                    {user.phone && (
-                      <div style={{ fontSize: 12, color: '#888', marginBottom: 2 }}>
-                        📱 {user.phone}
-                      </div>
-                    )}
-
-                    {user.area_assigned && (
-                      <div style={{ fontSize: 12, color: '#888' }}>
-                        📍 {user.area_assigned}
-                      </div>
-                    )}
+                    <div style={{ fontSize: 13, color: '#888' }}>{user.email}</div>
                   </div>
 
-                  {/* Actions */}
-                  <div style={{ 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    gap: 6,
-                    alignItems: 'flex-end'
+                  {/* Role Badge */}
+                  <div style={{
+                    background: user.role === 'admin' ? '#fee2e2' : '#e1f5ee',
+                    color: user.role === 'admin' ? '#dc2626' : '#1a6b4a',
+                    padding: '4px 12px',
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4
                   }}>
-                    <button
-                      onClick={() => toggleActive(user.id, user.is_active)}
-                      style={{
-                        padding: '5px 12px',
-                        borderRadius: 6,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        border: 'none',
-                        cursor: 'pointer',
-                        background: user.is_active ? '#dcfce7' : '#fee2e2',
-                        color: user.is_active ? '#15803d' : '#dc2626'
-                      }}
-                    >
-                      {user.is_active ? '✓ Active' : '✗ Inactive'}
-                    </button>
-
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button
-                        onClick={() => openEditForm(user)}
-                        style={{
-                          padding: 6,
-                          borderRadius: 6,
-                          border: '1px solid #e5e5e5',
-                          background: '#fff',
-                          color: '#666',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center'
-                        }}
-                        title="Edit user"
-                      >
-                        <Edit size={14} />
-                      </button>
-
-                      <button
-                        onClick={() => deleteUser(user)}
-                        style={{
-                          padding: 6,
-                          borderRadius: 6,
-                          border: 'none',
-                          background: '#fee2e2',
-                          color: '#dc2626',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center'
-                        }}
-                        title="Delete user"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
+                    {user.role === 'admin' ? <Shield size={14} /> : <UserCheck size={14} />}
+                    {user.role === 'admin' ? 'Admin' : 'Field Worker'}
                   </div>
+                </div>
+
+                {/* Additional Info */}
+                {(user.phone || user.area_assigned) && (
+                  <div style={{ 
+                    fontSize: 13, 
+                    color: '#666', 
+                    marginBottom: 12,
+                    paddingTop: 12,
+                    borderTop: '1px solid #f0f0f0'
+                  }}>
+                    {user.phone && <div style={{ marginBottom: 4 }}>📞 {user.phone}</div>}
+                    {user.area_assigned && <div>📍 {user.area_assigned}</div>}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => handleToggleActive(user)}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #e5e5e5',
+                      background: user.is_active ? '#fff' : '#1a6b4a',
+                      color: user.is_active ? '#666' : '#fff',
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {user.is_active ? 'Deactivate' : 'Activate'}
+                  </button>
+
+                  <button
+                    onClick={() => handleOpenEdit(user)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #e5e5e5',
+                      background: '#fff',
+                      color: '#1a6b4a',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f5f5f5'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+                  >
+                    <Edit2 size={16} />
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(user.id)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #fee2e2',
+                      background: '#fff',
+                      color: '#dc2626',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+                    onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -422,146 +460,171 @@ export default function UserManagementPage() {
         )}
       </div>
 
-      {/* Add/Edit User Modal */}
-      {showForm && (
-        <div 
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 100,
-            padding: 16
-          }} 
-          onClick={resetForm}
-        >
+      {/* Modal */}
+      {showModal && (
+        <>
+          {/* Backdrop */}
           <div 
+            onClick={() => setShowModal(false)}
             style={{
-              background: '#fff',
-              borderRadius: 16,
-              padding: 24,
-              maxWidth: 440,
-              width: '100%',
-              maxHeight: '90vh',
-              overflow: 'auto'
-            }} 
-            onClick={e => e.stopPropagation()}
-          >
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.5)',
+              zIndex: 100,
+              backdropFilter: 'blur(2px)',
+              animation: 'fadeIn 0.2s'
+            }}
+          />
+
+          {/* Modal Content */}
+          <div style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: '#fff',
+            borderRadius: 16,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            zIndex: 101,
+            width: '90%',
+            maxWidth: 480,
+            maxHeight: '90vh',
+            overflow: 'auto',
+            animation: 'slideUp 0.3s'
+          }}>
             {/* Modal Header */}
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
+            <div style={{
+              padding: '20px 20px 16px',
+              borderBottom: '1px solid #f0f0f0',
+              display: 'flex',
+              alignItems: 'center',
               justifyContent: 'space-between',
-              marginBottom: 20
+              position: 'sticky',
+              top: 0,
+              background: '#fff',
+              zIndex: 1,
+              borderRadius: '16px 16px 0 0'
             }}>
-              <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-                {editingUser ? 'Edit User' : 'Add New User'}
-              </h3>
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#111' }}>
+                  {editingUser ? 'Edit User' : 'Create New User'}
+                </div>
+                <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>
+                  {editingUser ? 'Update user information' : 'Add a new team member'}
+                </div>
+              </div>
               <button
-                onClick={resetForm}
+                onClick={() => setShowModal(false)}
                 style={{
-                  background: 'none',
+                  background: '#f5f5f5',
                   border: 'none',
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
                   cursor: 'pointer',
-                  padding: 4,
                   display: 'flex',
                   alignItems: 'center',
-                  color: '#666'
+                  justifyContent: 'center',
+                  color: '#666',
+                  transition: 'all 0.2s'
                 }}
+                onMouseEnter={e => e.currentTarget.style.background = '#e5e5e5'}
+                onMouseLeave={e => e.currentTarget.style.background = '#f5f5f5'}
               >
                 <X size={20} />
               </button>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                
-                {/* Email (only for new users) */}
-                {!editingUser && (
-                  <div>
-                    <label style={{ 
-                      display: 'block', 
-                      fontSize: 13, 
-                      fontWeight: 600, 
-                      marginBottom: 6,
-                      color: '#333'
-                    }}>
-                      Email Address *
-                    </label>
+            {/* Modal Form */}
+            <form onSubmit={handleSubmit} style={{ padding: 20 }}>
+              {/* Email */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: 13, 
+                  fontWeight: 600, 
+                  marginBottom: 6,
+                  color: '#333'
+                }}>
+                  Email Address *
+                </label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
+                  disabled={!!editingUser}
+                  placeholder="user@shishumandir.org"
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #e5e5e5',
+                    borderRadius: 8,
+                    fontSize: 14,
+                    boxSizing: 'border-box',
+                    background: editingUser ? '#f5f5f5' : '#fff',
+                    color: editingUser ? '#888' : '#111'
+                  }}
+                />
+              </div>
+
+              {/* Password */}
+              {!editingUser && (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ 
+                    display: 'block', 
+                    fontSize: 13, 
+                    fontWeight: 600, 
+                    marginBottom: 6,
+                    color: '#333'
+                  }}>
+                    Password *
+                  </label>
+                  <div style={{ position: 'relative' }}>
                     <input
-                      type="email"
+                      type={showPassword ? 'text' : 'password'}
+                      value={formData.password}
+                      onChange={e => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="Minimum 6 characters"
                       required
-                      value={formData.email}
-                      onChange={e => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="user@example.com"
+                      minLength={6}
                       style={{
                         width: '100%',
-                        padding: '10px 12px',
+                        padding: '10px 40px 10px 12px',
                         border: '1px solid #e5e5e5',
                         borderRadius: 8,
                         fontSize: 14,
-                        fontFamily: 'inherit'
+                        boxSizing: 'border-box'
                       }}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: 10,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#888',
+                        padding: 4,
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
                   </div>
-                )}
-
-                {/* Password (only for new users) */}
-                {!editingUser && (
-                  <div>
-                    <label style={{ 
-                      display: 'block', 
-                      fontSize: 13, 
-                      fontWeight: 600, 
-                      marginBottom: 6,
-                      color: '#333'
-                    }}>
-                      Password *
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        value={formData.password}
-                        onChange={e => setFormData({ ...formData, password: e.target.value })}
-                        placeholder="Minimum 6 characters"
-                        minLength={6}
-                        style={{
-                          width: '100%',
-                          padding: '10px 42px 10px 12px',
-                          border: '1px solid #e5e5e5',
-                          borderRadius: 8,
-                          fontSize: 14,
-                          fontFamily: 'inherit'
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        style={{
-                          position: 'absolute',
-                          right: 10,
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: 4,
-                          display: 'flex',
-                          alignItems: 'center',
-                          color: '#666'
-                        }}
-                      >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
+                  <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+                    Password must be at least 6 characters long
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Full Name */}
+              {/* Full Name & Employee ID */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
                 <div>
                   <label style={{ 
                     display: 'block', 
@@ -574,22 +637,21 @@ export default function UserManagementPage() {
                   </label>
                   <input
                     type="text"
-                    required
                     value={formData.full_name}
                     onChange={e => setFormData({ ...formData, full_name: e.target.value })}
                     placeholder="John Doe"
+                    required
                     style={{
                       width: '100%',
                       padding: '10px 12px',
                       border: '1px solid #e5e5e5',
                       borderRadius: 8,
                       fontSize: 14,
-                      fontFamily: 'inherit'
+                      boxSizing: 'border-box'
                     }}
                   />
                 </div>
 
-                {/* Employee ID */}
                 <div>
                   <label style={{ 
                     display: 'block', 
@@ -611,12 +673,14 @@ export default function UserManagementPage() {
                       border: '1px solid #e5e5e5',
                       borderRadius: 8,
                       fontSize: 14,
-                      fontFamily: 'inherit'
+                      boxSizing: 'border-box'
                     }}
                   />
                 </div>
+              </div>
 
-                {/* Role */}
+              {/* Phone & Area */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
                 <div>
                   <label style={{ 
                     display: 'block', 
@@ -625,60 +689,24 @@ export default function UserManagementPage() {
                     marginBottom: 6,
                     color: '#333'
                   }}>
-                    Role *
-                  </label>
-                  <select
-                    required
-                    value={formData.role}
-                    onChange={e => setFormData({ ...formData, role: e.target.value as 'admin' | 'field_worker' })}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      border: '1px solid #e5e5e5',
-                      borderRadius: 8,
-                      fontSize: 14,
-                      fontFamily: 'inherit',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <option value="field_worker">Regular User (Field Worker)</option>
-                    <option value="admin">Admin (Full Access)</option>
-                  </select>
-                  <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
-                    {formData.role === 'admin' 
-                      ? '✓ Can manage users and all data' 
-                      : '✓ Can add/edit children data'}
-                  </div>
-                </div>
-
-                {/* Phone */}
-                <div>
-                  <label style={{ 
-                    display: 'block', 
-                    fontSize: 13, 
-                    fontWeight: 600, 
-                    marginBottom: 6,
-                    color: '#333'
-                  }}>
-                    Phone Number
+                    Phone
                   </label>
                   <input
                     type="tel"
                     value={formData.phone}
                     onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+91 9876543210"
+                    placeholder="+91 98765 43210"
                     style={{
                       width: '100%',
                       padding: '10px 12px',
                       border: '1px solid #e5e5e5',
                       borderRadius: 8,
                       fontSize: 14,
-                      fontFamily: 'inherit'
+                      boxSizing: 'border-box'
                     }}
                   />
                 </div>
 
-                {/* Area Assigned */}
                 <div>
                   <label style={{ 
                     display: 'block', 
@@ -693,61 +721,95 @@ export default function UserManagementPage() {
                     type="text"
                     value={formData.area_assigned}
                     onChange={e => setFormData({ ...formData, area_assigned: e.target.value })}
-                    placeholder="e.g., North Bangalore"
+                    placeholder="North Zone"
                     style={{
                       width: '100%',
                       padding: '10px 12px',
                       border: '1px solid #e5e5e5',
                       borderRadius: 8,
                       fontSize: 14,
-                      fontFamily: 'inherit'
+                      boxSizing: 'border-box'
                     }}
                   />
                 </div>
+              </div>
 
-                {/* Submit Buttons */}
-                <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    disabled={submitting}
-                    style={{
-                      flex: 1,
-                      padding: 12,
-                      background: '#f5f5f5',
-                      color: '#666',
-                      border: 'none',
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                      fontSize: 14,
-                      fontWeight: 600
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    style={{
-                      flex: 1,
-                      padding: 12,
-                      background: '#1a6b4a',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: 8,
-                      cursor: submitting ? 'not-allowed' : 'pointer',
-                      fontSize: 14,
-                      fontWeight: 600,
-                      opacity: submitting ? 0.6 : 1
-                    }}
-                  >
-                    {submitting ? 'Saving...' : editingUser ? 'Update User' : 'Create User'}
-                  </button>
-                </div>
+              {/* Role */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ 
+                  display: 'block', 
+                  fontSize: 13, 
+                  fontWeight: 600, 
+                  marginBottom: 6,
+                  color: '#333'
+                }}>
+                  Role *
+                </label>
+                <select
+                  value={formData.role}
+                  onChange={e => setFormData({ ...formData, role: e.target.value as 'admin' | 'field_worker' })}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #e5e5e5',
+                    borderRadius: 8,
+                    fontSize: 14,
+                    boxSizing: 'border-box',
+                    background: '#fff',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="field_worker">Field Worker</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  style={{
+                    flex: 1,
+                    padding: '12px 20px',
+                    border: '1px solid #e5e5e5',
+                    background: '#fff',
+                    color: '#666',
+                    borderRadius: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f5f5f5'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    flex: 1,
+                    padding: '12px 20px',
+                    border: 'none',
+                    background: '#1a6b4a',
+                    color: '#fff',
+                    borderRadius: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#15563c'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#1a6b4a'}
+                >
+                  {editingUser ? 'Update User' : 'Create User'}
+                </button>
               </div>
             </form>
           </div>
-        </div>
+        </>
       )}
     </div>
   )
