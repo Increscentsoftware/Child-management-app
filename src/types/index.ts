@@ -135,6 +135,7 @@ export interface Child {
 
   // Contact
   address_line1?: string
+  address_city?: string
   contact_phone?: string
 
   special_remarks?: string
