@@ -662,9 +662,10 @@ export async function importFile(file: File): Promise<ImportResult[]> {
   return parseXlsxHorizontal(file)
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function checkDuplicate(
   child: Partial<Child>,
-  supabase: ReturnType<typeof import('@supabase/supabase-js').createClient>
+  supabase: any
 ): Promise<{ found:boolean; match?:{ id:string; full_name:string; school_id:string } }> {
   if (child.school_id) {
     const { data } = await supabase.from('children').select('id, full_name, school_id').eq('school_id', child.school_id).maybeSingle()

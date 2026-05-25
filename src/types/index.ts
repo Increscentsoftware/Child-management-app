@@ -7,6 +7,8 @@ export type FatherStatus = 'Alive' | 'Dead' | 'Abandoned' | 'Unknown'
 export type MotherStatus = 'Alive' | 'Dead' | 'Abandoned' | 'Unknown'
 export type Sex = 'Male' | 'Female' | 'Other'
 export type Category = 'Category I' | 'Category II' | 'Category III' | 'Category IV'
+export type ChildType = 'shishu_student' | 'sponsored_external' | 'alumni' | 'other'
+export type DocType = 'photo' | 'progress_card' | 'certificate' | 'aadhar' | 'birth_certificate' | 'sponsor_letter' | 'other'
 
 export interface SocialWorker {
   id: string
@@ -23,6 +25,8 @@ export interface SocialWorker {
 export interface Child {
   id: string
   school_id: string
+  child_type?: ChildType
+  lifecycle_status?: string
   admission_date?: string
   full_name: string
   date_of_birth?: string
@@ -42,6 +46,7 @@ export interface Child {
   father_mobile?: string
   father_status: FatherStatus
   father_occupation?: string
+  father_nature_of_work?: string
   father_earnings?: string
   father_education?: string
   father_habits?: string
@@ -57,6 +62,7 @@ export interface Child {
   mother_mobile?: string
   mother_status: MotherStatus
   mother_occupation?: string
+  mother_nature_of_work?: string
   mother_earnings?: string
   mother_education?: string
   mother_habits?: string
@@ -80,20 +86,28 @@ export interface Child {
   // Financial
   avg_income_father?: string
   avg_income_mother?: string
+  avg_monthly_income?: string
   other_income?: string
+  govt_support?: string
   num_dependents?: string
   debts?: string
   savings?: string
 
   // Living
   area?: string
+  area_type?: string
   house_size?: string
   house_roof?: string
   house_floor?: string
   house_ownership?: string
+  house_condition?: string
+  kitchen_type?: string
+  bathing_place?: string
   rent_per_month?: string
   advance_paid?: string
   vehicles?: string
+  sanitation?: string
+  water_source?: string
 
   // Child health
   height_cm?: string
@@ -103,9 +117,25 @@ export interface Child {
   food_type?: string
   medical_help_from?: string
 
+  // Child development
+  interests?: string
+  preschool?: string
+  relationship_father?: string
+  relationship_mother?: string
+  relationship_siblings?: string
+
   // Life skills
   mother_life_skills?: boolean
   father_life_skills?: boolean
+
+  // Assessment
+  conclusion?: string
+  reported_by?: string
+  verified_by?: string
+
+  // Contact
+  address_line1?: string
+  contact_phone?: string
 
   special_remarks?: string
   source_file?: string
@@ -210,3 +240,51 @@ export interface ChildFilter {
 // Form types for Add/Edit
 export type ChildFormData = Omit<Child, 'id' | 'created_at' | 'updated_at' | 'is_active' | 'followups' | 'change_log'>
 export type FollowupFormData = Omit<AnnualFollowup, 'id' | 'child_id' | 'created_at' | 'updated_at'>
+
+export interface Sibling {
+  id?: string
+  child_id?: string
+  name?: string
+  age?: string
+  sex?: string
+  education?: string
+  medium_of_instruction?: string
+  occupation?: string
+  health?: string
+  is_also_sm_student?: boolean
+}
+
+export interface ImportError {
+  field: string
+  message: string
+}
+
+export interface ImportWarning {
+  field: string
+  message: string
+}
+
+export interface ImportResult {
+  child: Partial<Child>
+  siblings: Partial<Sibling>[]
+  followups: Partial<AnnualFollowup>[]
+  errors: ImportError[]
+  warnings: ImportWarning[]
+  unmapped_fields: Record<string, unknown>
+  source_file: string
+  detected_type: string | null
+}
+
+export interface Document {
+  id: string
+  child_id: string
+  doc_type: DocType
+  file_name: string
+  storage_path: string
+  public_url: string
+  file_size_kb?: number
+  academic_year?: string
+  term?: number
+  notes?: string
+  uploaded_at: string
+}

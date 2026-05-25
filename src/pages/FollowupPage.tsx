@@ -140,7 +140,7 @@ export default function FollowupPage() {
       await saveFollowupLocally(fu)
 
       // Detect changes and build change log entries
-      const changes = detectChanges(id, child.full_name, child, data, data.recorded_by_name || '', fuId, data.year_label)
+      const changes = detectChanges(id, child.full_name, child as unknown as Record<string, unknown>, data, data.recorded_by_name || '', fuId, data.year_label)
 
       for (const ch of changes) {
         const entry: ChangeLogEntry = {

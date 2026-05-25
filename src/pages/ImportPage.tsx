@@ -741,7 +741,7 @@ export default function ImportPage() {
             {importSummary.errors.length > 0 && (
               <div style={{ background:'#fef2f2', borderRadius:10, padding:12, marginBottom:16, textAlign:'left', maxWidth:340, margin:'0 auto 16px' }}>
                 <div style={{ fontSize:12, fontWeight:600, color:RED, marginBottom:6 }}>Errors ({importSummary.errors.length})</div>
-                {importSummary.errors.map((e: ImportError, i: number) => (
+                {importSummary.errors.map((e: string, i: number) => (
                   <div key={i} style={{ fontSize:11, color:RED, padding:'2px 0' }}>{e}</div>
                 ))}
               </div>
