@@ -65,6 +65,11 @@ function App() {
           />
 
           <Route
+            path="children/:id/edit"
+            element={<AddChildPage />}
+          />
+
+          <Route
             path="children/:id/followup"
             element={<FollowupPage />}
           />

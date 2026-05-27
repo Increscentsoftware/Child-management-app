@@ -48,6 +48,19 @@ export async function updateChildLocally(child: Partial<Child> & { id: string })
   })
 }
 
+export async function deleteChildLocally(id: string): Promise<void> {
+  await db.children.delete(id)
+  await db.sync_queue.add({
+    id: crypto.randomUUID(),
+    operation: 'DELETE',
+    table_name: 'children',
+    record_id: id,
+    payload: { id },
+    created_at: new Date().toISOString(),
+    retry_count: 0
+  })
+}
+
 export async function saveFollowupLocally(fu: AnnualFollowup): Promise<void> {
   await db.followups.put(fu)
   await db.sync_queue.add({

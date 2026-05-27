@@ -1,358 +1,371 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import toast from 'react-hot-toast'
-import { db, updateChildLocally, saveFollowupLocally, saveChangeLogLocally } from '@/lib/db'
-import { detectChanges } from '@/lib/excelImport'
+import { supabase } from '@/lib/supabase'
+import { saveFollowupLocally, saveChangeLogLocally } from '@/lib/db'
 import { useAppStore } from '@/lib/store'
 import type { Child, AnnualFollowup, ChangeLogEntry } from '@/types'
-import { ArrowLeft, Camera } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import toast from 'react-hot-toast'
+import { ArrowLeft, Check, Loader2, Paperclip } from 'lucide-react'
+import { DocumentUpload } from '@/components/DocumentComponents'
 
-type FUForm = Partial<AnnualFollowup> & { year_label: string; recorded_by_name: string; visit_date: string }
+const G = '#1a6b4a'
+const inp: React.CSSProperties = {
+  width: '100%', padding: '9px 11px', border: '1px solid #e0e0e0',
+  borderRadius: 8, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+  background: '#fff', boxSizing: 'border-box', color: '#111'
+}
+const sel: React.CSSProperties = { ...inp, cursor: 'pointer' }
+const ta: React.CSSProperties = { ...inp, minHeight: 80, resize: 'vertical' as const }
+const g2: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }
 
-function Field({ label, children, changed }: { label: string; children: React.ReactNode; changed?: boolean }) {
+function F({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
-    <div style={{ marginBottom: 10 }}>
-      <label style={{ fontSize: 11, color: changed ? '#0f6e56' : '#666', display: 'block', marginBottom: 4, fontWeight: changed ? 600 : 400 }}>
-        {label}{changed && <span style={{ marginLeft: 4, fontSize: 10 }}>⚠ will update main record</span>}
-      </label>
+    <div style={{ marginBottom: 12 }}>
+      <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 4 }}>{label}</label>
       {children}
+      {hint && <div style={{ fontSize: 10, color: '#999', marginTop: 3 }}>{hint}</div>}
     </div>
   )
 }
 
-const inp = (changed = false) => ({
-  width: '100%', padding: '8px 10px', border: `1px solid ${changed ? '#0f6e56' : '#e5e5e5'}`,
-  borderRadius: 8, fontSize: 13, fontFamily: 'inherit', outline: 'none',
-  background: changed ? '#f0faf6' : '#fff', boxSizing: 'border-box' as const, color: '#111'
-})
-
 function Sec({ title }: { title: string }) {
-  return <div style={{ fontSize: 11, fontWeight: 600, color: '#1a6b4a', background: '#e1f5ee', padding: '5px 10px', borderRadius: 8, margin: '14px 0 10px' }}>{title}</div>
+  return (
+    <div style={{ fontSize: 10, fontWeight: 700, color: G, background: '#e8f5e9', padding: '5px 10px', borderRadius: 8, margin: '16px 0 10px', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
+      {title}
+    </div>
+  )
 }
+
+const TRACKED_FIELDS: { key: keyof AnnualFollowup; label: string; childKey?: keyof Child }[] = [
+  { key: 'present_class',      label: 'Present Class',       childKey: 'present_class' },
+  { key: 'child_health',       label: 'Child Health',         childKey: 'child_health' },
+  { key: 'father_status',      label: 'Father Status',        childKey: 'father_status' },
+  { key: 'father_occupation',  label: 'Father Occupation',    childKey: 'father_occupation' },
+  { key: 'father_earnings',    label: 'Father Earnings',      childKey: 'father_earnings' },
+  { key: 'father_habits',      label: 'Father Habits',        childKey: 'father_habits' },
+  { key: 'father_health',      label: 'Father Health',        childKey: 'father_health' },
+  { key: 'mother_status',      label: 'Mother Status',        childKey: 'mother_status' },
+  { key: 'mother_occupation',  label: 'Mother Occupation',    childKey: 'mother_occupation' },
+  { key: 'mother_earnings',    label: 'Mother Earnings',      childKey: 'mother_earnings' },
+  { key: 'mother_health',      label: 'Mother Health',        childKey: 'mother_health' },
+  { key: 'rent_per_month',     label: 'Rent / Month',         childKey: 'rent_per_month' },
+  { key: 'num_dependents',     label: 'No. of Dependents',    childKey: 'num_dependents' },
+  { key: 'debts',              label: 'Debts',                childKey: 'debts' },
+]
 
 export default function FollowupPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAppStore()
-  const [child, setChild] = useState<Child | null>(null)
-  const [changedFields, setChangedFields] = useState<Set<string>>(new Set())
-  const [saving, setSaving] = useState(false)
-  const [photo, setPhoto] = useState<File | null>(null)
 
-  const { register, handleSubmit, watch, setValue } = useForm<FUForm>({
-    defaultValues: { year_label: new Date().getFullYear() + '-' + String(new Date().getFullYear() + 1).slice(2), recorded_by_name: user?.full_name || '' }
-  })
+  const [child, setChild] = useState<Child | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [d, setD] = useState<Record<string, unknown>>({})
+  const [uploadedDocs, setUploadedDocs] = useState<{ name: string; url: string }[]>([])
 
   useEffect(() => {
     if (!id) return
-    db.children.get(id).then(c => {
-      if (!c) return
-      setChild(c)
-      setValue('present_class', c.present_class || '')
-      setValue('father_status', c.father_status)
-      setValue('father_occupation', c.father_occupation || '')
-      setValue('father_earnings', c.father_earnings || '')
-      setValue('father_habits', c.father_habits || '')
-      setValue('father_health', c.father_health || '')
-      setValue('father_dv', c.father_dv)
-      setValue('mother_status', c.mother_status)
-      setValue('mother_occupation', c.mother_occupation || '')
-      setValue('mother_earnings', c.mother_earnings || '')
-      setValue('mother_health', c.mother_health || '')
-      setValue('rent_per_month', c.rent_per_month || '')
-      setValue('num_dependents', c.num_dependents || '')
-      setValue('debts', c.debts || '')
-    })
-  }, [id])
-
-  // Track changes vs original child data
-  const watchAll = watch()
-  useEffect(() => {
-    if (!child) return
-    const changed = new Set<string>()
-    const checks: Array<[string, keyof Child]> = [
-      ['father_status', 'father_status'], ['father_health', 'father_health'],
-      ['father_habits', 'father_habits'], ['father_earnings', 'father_earnings'],
-      ['father_occupation', 'father_occupation'], ['father_dv', 'father_dv'],
-      ['mother_status', 'mother_status'], ['mother_occupation', 'mother_occupation'],
-      ['mother_earnings', 'mother_earnings'], ['mother_health', 'mother_health'],
-      ['present_class', 'present_class'], ['rent_per_month', 'rent_per_month'],
-      ['num_dependents', 'num_dependents'], ['debts', 'debts'],
-    ]
-    checks.forEach(([fuKey, childKey]) => {
-      const newVal = String((watchAll as Record<string, unknown>)[fuKey] ?? '')
-      const oldVal = String((child as unknown as Record<string, unknown>)[childKey] ?? '')
-      if (newVal && newVal !== oldVal) changed.add(fuKey)
-    })
-    setChangedFields(changed)
-  }, [watchAll, child])
-
-  const onSubmit = async (data: FUForm) => {
-    if (!child || !id) return
-    setSaving(true)
-
-    try {
-      let photoUrl = child.photo_url
-      if (photo) {
-        const path = `${id}/${Date.now()}_${photo.name}`
-        const { error: upErr } = await supabase.storage
-          .from('child-photos')
-          .upload(path, photo)
-        if (!upErr) {
-          const { data: urlData } = supabase.storage.from('child-photos').getPublicUrl(path)
-          photoUrl = urlData.publicUrl
-        }
+    supabase.from('children').select('*').eq('id', id).single().then(({ data }) => {
+      if (data) {
+        setChild(data as Child)
+        // Pre-fill form with current child values
+        setD({
+          year_label: '',
+          visit_date: new Date().toISOString().slice(0, 10),
+          present_class:     data.present_class     ?? '',
+          child_height:      data.height_cm         ?? '',
+          child_weight:      data.weight_kg         ?? '',
+          child_health:      data.child_health      ?? '',
+          father_status:     data.father_status     ?? '',
+          father_occupation: data.father_occupation ?? '',
+          father_earnings:   data.father_earnings   ?? '',
+          father_habits:     data.father_habits     ?? '',
+          father_health:     data.father_health     ?? '',
+          father_dv:         data.father_dv         ?? false,
+          mother_status:     data.mother_status     ?? '',
+          mother_occupation: data.mother_occupation ?? '',
+          mother_earnings:   data.mother_earnings   ?? '',
+          mother_health:     data.mother_health     ?? '',
+          rent_per_month:    data.rent_per_month    ?? '',
+          num_dependents:    data.num_dependents    ?? '',
+          debts:             data.debts             ?? '',
+          special_remarks:   '',
+          recorded_by_name:  user?.full_name        ?? '',
+          verified_by:       '',
+        })
       }
+    })
+  }, [id, user])
 
+  const set = (k: string, v: unknown) => setD(p => ({ ...p, [k]: v }))
+  const str = (k: string) => String(d[k] ?? '')
+
+  async function handleSave() {
+    if (!child || !id) return
+    if (!str('year_label').trim()) { toast.error('Year label is required (e.g. 2024-25)'); return }
+
+    setSaving(true)
+    try {
       const fuId = crypto.randomUUID()
-      const fu: AnnualFollowup = {
+      const now = new Date().toISOString()
+
+      const followup: AnnualFollowup = {
         id: fuId,
         child_id: id,
-        year_label: data.year_label,
-        visit_date: data.visit_date,
-        present_class: data.present_class,
-        father_status: data.father_status,
-        father_occupation: data.father_occupation,
-        father_earnings: data.father_earnings,
-        father_habits: data.father_habits,
-        father_health: data.father_health,
-        father_dv: data.father_dv,
-        mother_status: data.mother_status,
-        mother_occupation: data.mother_occupation,
-        mother_earnings: data.mother_earnings,
-        mother_health: data.mother_health,
-        rent_per_month: data.rent_per_month,
-        num_dependents: data.num_dependents,
-        debts: data.debts,
-        mother_life_skills: data.mother_life_skills,
-        father_life_skills: data.father_life_skills,
-        special_remarks: data.special_remarks,
-        recorded_by_name: data.recorded_by_name || user?.full_name,
-        recorded_by: user?.id,
-        photo_url: photoUrl,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
+        year_label:        str('year_label'),
+        visit_date:        str('visit_date') || null,
+        present_class:     str('present_class')     || null,
+        child_height:      str('child_height')      || null,
+        child_weight:      str('child_weight')      || null,
+        child_health:      str('child_health')      || null,
+        father_status:     str('father_status')     || null,
+        father_occupation: str('father_occupation') || null,
+        father_earnings:   str('father_earnings')   || null,
+        father_habits:     str('father_habits')     || null,
+        father_health:     str('father_health')     || null,
+        father_dv:         d.father_dv === true,
+        mother_status:     str('mother_status')     || null,
+        mother_occupation: str('mother_occupation') || null,
+        mother_earnings:   str('mother_earnings')   || null,
+        mother_health:     str('mother_health')     || null,
+        rent_per_month:    str('rent_per_month')    || null,
+        num_dependents:    str('num_dependents')    || null,
+        debts:             str('debts')             || null,
+        special_remarks:   str('special_remarks')   || null,
+        recorded_by:       user?.id                 ?? null,
+        recorded_by_name:  str('recorded_by_name')  || null,
+        verified_by:       str('verified_by')       || null,
+        created_at:        now,
+        updated_at:        now,
+      } as unknown as AnnualFollowup
 
-      // Save followup locally (and queue for sync)
-      await saveFollowupLocally(fu)
+      // Save followup
+      const { error: fuErr } = await supabase.from('annual_followups').insert(followup)
+      if (fuErr) throw fuErr
+      await saveFollowupLocally(followup)
 
-      // Detect changes and build change log entries
-      const changes = detectChanges(id, child.full_name, child as unknown as Record<string, unknown>, data, data.recorded_by_name || '', fuId, data.year_label)
-
-      for (const ch of changes) {
-        const entry: ChangeLogEntry = {
-          id: ch.id,
-          child_id: ch.child_id,
-          child_name: ch.child_name,
-          field_name: ch.field_name,
-          old_value: ch.old_value,
-          new_value: ch.new_value,
-          changed_by_name: ch.changed_by_name,
-          changed_by: user?.id,
-          followup_id: ch.followup_id,
-          followup_year: ch.followup_year,
-          changed_at: ch.changed_at,
+      // Build change log entries for fields that changed from child baseline
+      const changeEntries: ChangeLogEntry[] = []
+      for (const field of TRACKED_FIELDS) {
+        const newVal = String((followup as Record<string, unknown>)[field.key] ?? '')
+        const oldVal = field.childKey ? String((child as Record<string, unknown>)[field.childKey] ?? '') : ''
+        if (newVal && newVal !== oldVal) {
+          const entry: ChangeLogEntry = {
+            id: crypto.randomUUID(),
+            child_id: id,
+            child_name: child.full_name,
+            field_name: field.label,
+            old_value: oldVal || null,
+            new_value: newVal,
+            changed_by: user?.id ?? null,
+            changed_by_name: str('recorded_by_name') || null,
+            followup_id: fuId,
+            followup_year: str('year_label'),
+            changed_at: now,
+          } as unknown as ChangeLogEntry
+          changeEntries.push(entry)
         }
-        await saveChangeLogLocally(entry)
       }
 
-      // Update child's main record with latest values from followup
-      const updatedChild: Partial<Child> & { id: string } = {
-        id,
-        updated_at: new Date().toISOString(),
-        last_followup_date: data.visit_date || new Date().toISOString().slice(0, 10),
-        photo_url: photoUrl,
+      if (changeEntries.length > 0) {
+        await supabase.from('change_log').insert(changeEntries)
+        for (const entry of changeEntries) {
+          await saveChangeLogLocally(entry)
+        }
       }
-      if (data.present_class) updatedChild.present_class = data.present_class
-      if (data.father_status) updatedChild.father_status = data.father_status
-      if (data.father_occupation) updatedChild.father_occupation = data.father_occupation
-      if (data.father_earnings) updatedChild.father_earnings = data.father_earnings
-      if (data.father_habits) updatedChild.father_habits = data.father_habits
-      if (data.father_health) updatedChild.father_health = data.father_health
-      if (data.father_dv !== undefined) updatedChild.father_dv = data.father_dv
-      if (data.mother_status) updatedChild.mother_status = data.mother_status
-      if (data.mother_occupation) updatedChild.mother_occupation = data.mother_occupation
-      if (data.mother_earnings) updatedChild.mother_earnings = data.mother_earnings
-      if (data.mother_health) updatedChild.mother_health = data.mother_health
-      if (data.rent_per_month) updatedChild.rent_per_month = data.rent_per_month
-      if (data.num_dependents) updatedChild.num_dependents = data.num_dependents
-      if (data.debts) updatedChild.debts = data.debts
 
-      await updateChildLocally(updatedChild)
+      // Update child record with latest values from this follow-up so risk indicators stay current
+      const childUpdates: Record<string, unknown> = {
+        last_followup_date:  str('visit_date') || now.slice(0, 10),
+        present_class:       str('present_class')     || child.present_class,
+        child_health:        str('child_health')      || child.child_health,
+        father_status:       str('father_status')     || child.father_status,
+        father_occupation:   str('father_occupation') || child.father_occupation,
+        father_earnings:     str('father_earnings')   || child.father_earnings,
+        father_habits:       str('father_habits')     || child.father_habits,
+        father_health:       str('father_health')     || child.father_health,
+        father_dv:           d.father_dv === true,
+        mother_status:       str('mother_status')     || child.mother_status,
+        mother_occupation:   str('mother_occupation') || child.mother_occupation,
+        mother_earnings:     str('mother_earnings')   || child.mother_earnings,
+        mother_health:       str('mother_health')     || child.mother_health,
+        rent_per_month:      str('rent_per_month')    || child.rent_per_month,
+        num_dependents:      str('num_dependents')    || child.num_dependents,
+        debts:               str('debts')             || child.debts,
+      }
+      if (str('child_height')) childUpdates.height_cm = str('child_height')
+      if (str('child_weight')) childUpdates.weight_kg = str('child_weight')
+      await supabase.from('children').update(childUpdates).eq('id', id)
 
-      toast.success(`Follow-up saved! ${changes.length} field(s) updated.`)
+      toast.success('Annual follow-up saved!')
       navigate(`/children/${id}`)
-    } catch (err) {
-      toast.error('Failed to save follow-up')
-      console.error(err)
+    } catch (err: unknown) {
+      toast.error((err as Error).message || 'Save failed')
     } finally {
       setSaving(false)
     }
   }
 
-  if (!child) return <div style={{ padding: 24, color: '#888' }}>Loading…</div>
-
-  const isChg = (f: string) => changedFields.has(f)
+  if (!child) {
+    return (
+      <div style={{ padding: 24, textAlign: 'center', color: '#888', fontFamily: "'DM Sans',sans-serif" }}>
+        Loading…
+      </div>
+    )
+  }
 
   return (
-    <div style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-      <div style={{ background: '#1a6b4a', color: '#fff', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif" }}>
+      {/* Header */}
+      <div style={{ background: G, color: '#fff', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <button onClick={() => navigate(`/children/${id}`)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 2 }}>
           <ArrowLeft size={20} />
         </button>
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>Annual Follow-up</div>
-          <div style={{ fontSize: 11, opacity: 0.8 }}>{child.full_name} · {child.school_id}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, fontSize: 15 }}>Annual Follow-up</div>
+          <div style={{ fontSize: 11, opacity: 0.75 }}>{child.full_name} · {child.school_id}</div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} style={{ padding: '12px 14px 90px' }}>
-        <div style={{ background: '#e1f5ee', border: '0.5px solid #5dcaa5', borderRadius: 10, padding: '9px 11px', marginBottom: 12, fontSize: 11, color: '#085041' }}>
-          Fields pre-filled from latest record. Changed fields are highlighted green and will update the child's main record + be logged in Change Log.
+      <div style={{ padding: '14px 16px 160px' }}>
+        <Sec title="Visit Details" />
+        <div style={g2}>
+          <F label="Year Label *" hint="e.g. 2024-25, 2025-26">
+            <input style={inp} value={str('year_label')} onChange={e => set('year_label', e.target.value)} placeholder="2024-25" />
+          </F>
+          <F label="Visit Date">
+            <input type="date" style={inp} value={str('visit_date')} onChange={e => set('visit_date', e.target.value)} />
+          </F>
         </div>
 
-        {/* Photo upload */}
-        <div style={{ border: '1.5px dashed #ddd', borderRadius: 10, padding: 14, textAlign: 'center', cursor: 'pointer', marginBottom: 12 }}
-          onClick={() => document.getElementById('photo-inp')?.click()}>
-          <Camera size={20} color="#999" style={{ margin: '0 auto 4px', display: 'block' }} />
-          <div style={{ fontSize: 11, color: '#999' }}>{photo ? photo.name : 'Capture or upload updated photo'}</div>
-          <input id="photo-inp" type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-            onChange={e => e.target.files?.[0] && setPhoto(e.target.files[0])} />
+        <Sec title="Child at Follow-up" />
+        <div style={g2}>
+          <F label="Present Class">
+            <input style={inp} value={str('present_class')} onChange={e => set('present_class', e.target.value)} placeholder="e.g. 5th Std" />
+          </F>
+          <F label="Child Health">
+            <input style={inp} value={str('child_health')} onChange={e => set('child_health', e.target.value)} placeholder="Good / Fair / Poor" />
+          </F>
+          <F label="Height (cm)">
+            <input style={inp} value={str('child_height')} onChange={e => set('child_height', e.target.value)} placeholder="120" />
+          </F>
+          <F label="Weight (kg)">
+            <input style={inp} value={str('child_weight')} onChange={e => set('child_weight', e.target.value)} placeholder="25" />
+          </F>
         </div>
 
-        <Sec title="Child — general update" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <Field label="Year" changed={false}>
-            <input {...register('year_label')} style={inp()} />
-          </Field>
-          <Field label="Present class" changed={isChg('present_class')}>
-            <input {...register('present_class')} style={inp(isChg('present_class'))} />
-          </Field>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <Field label="Height (cm)">
-            <input {...register('child_height')} style={inp()} />
-          </Field>
-          <Field label="Weight (kg)">
-            <input {...register('child_weight')} style={inp()} />
-          </Field>
-        </div>
-
-        <Sec title="Father — status update" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <Field label="Live status" changed={isChg('father_status')}>
-            <select {...register('father_status')} style={inp(isChg('father_status'))}>
+        <Sec title="Father at Follow-up" />
+        <div style={g2}>
+          <F label="Father Status">
+            <select style={sel} value={str('father_status')} onChange={e => set('father_status', e.target.value)}>
+              <option value="">—</option>
               <option>Alive</option><option>Dead</option><option>Abandoned</option><option>Unknown</option>
             </select>
-          </Field>
-          <Field label="Health" changed={isChg('father_health')}>
-            <input {...register('father_health')} style={inp(isChg('father_health'))} />
-          </Field>
+          </F>
+          <F label="Occupation">
+            <input style={inp} value={str('father_occupation')} onChange={e => set('father_occupation', e.target.value)} />
+          </F>
+          <F label="Monthly Income (₹)">
+            <input style={inp} value={str('father_earnings')} onChange={e => set('father_earnings', e.target.value)} />
+          </F>
+          <F label="Health">
+            <input style={inp} value={str('father_health')} onChange={e => set('father_health', e.target.value)} />
+          </F>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <Field label="Habits" changed={isChg('father_habits')}>
-            <select {...register('father_habits')} style={inp(isChg('father_habits'))}>
-              <option>None</option><option>Drinking & Smoking</option><option>Alcoholic</option>
-              <option>Social Drinker</option><option>AA Meetings</option><option>Other</option>
-            </select>
-          </Field>
-          <Field label="Domestic violence" changed={isChg('father_dv')}>
-            <select {...register('father_dv', { setValueAs: v => v === 'true' || v === true })} style={inp(isChg('father_dv'))}>
-              <option value="false">No</option><option value="true">Yes</option>
-            </select>
-          </Field>
-        </div>
-        <Field label="Monthly income" changed={isChg('father_earnings')}>
-          <input {...register('father_earnings')} style={inp(isChg('father_earnings'))} />
-        </Field>
-        <Field label="Occupation" changed={isChg('father_occupation')}>
-          <input {...register('father_occupation')} style={inp(isChg('father_occupation'))} />
-        </Field>
-
-        <Sec title="Mother — status update" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <Field label="Live status" changed={isChg('mother_status')}>
-            <select {...register('mother_status')} style={inp(isChg('mother_status'))}>
-              <option>Alive</option><option>Dead</option><option>Abandoned</option>
-            </select>
-          </Field>
-          <Field label="Occupation" changed={isChg('mother_occupation')}>
-            <input {...register('mother_occupation')} style={inp(isChg('mother_occupation'))} />
-          </Field>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <Field label="Monthly income" changed={isChg('mother_earnings')}>
-            <input {...register('mother_earnings')} style={inp(isChg('mother_earnings'))} />
-          </Field>
-          <Field label="Health" changed={isChg('mother_health')}>
-            <input {...register('mother_health')} style={inp(isChg('mother_health'))} />
-          </Field>
+        <F label="Habits">
+          <input style={inp} value={str('father_habits')} onChange={e => set('father_habits', e.target.value)} placeholder="e.g. Alcoholic, Smoking" />
+        </F>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <input type="checkbox" id="fdv" checked={d.father_dv === true} onChange={e => set('father_dv', e.target.checked)} style={{ width: 16, height: 16, accentColor: G }} />
+          <label htmlFor="fdv" style={{ fontSize: 12, color: '#333' }}>Domestic violence reported</label>
         </div>
 
-        <Sec title="Living conditions" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <Field label="Rent / month" changed={isChg('rent_per_month')}>
-            <input {...register('rent_per_month')} style={inp(isChg('rent_per_month'))} />
-          </Field>
-          <Field label="No. of dependents" changed={isChg('num_dependents')}>
-            <input {...register('num_dependents')} style={inp(isChg('num_dependents'))} />
-          </Field>
-        </div>
-        <Field label="Debts (with purpose)" changed={isChg('debts')}>
-          <textarea {...register('debts')} style={{ ...inp(isChg('debts')), minHeight: 55, resize: 'vertical' }} />
-        </Field>
-
-        <Sec title="Life skills training" />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <Field label="Mother attended">
-            <select {...register('mother_life_skills', { setValueAs: v => v === 'true' })} style={inp()}>
-              <option value="false">No</option><option value="true">Yes</option>
+        <Sec title="Mother at Follow-up" />
+        <div style={g2}>
+          <F label="Mother Status">
+            <select style={sel} value={str('mother_status')} onChange={e => set('mother_status', e.target.value)}>
+              <option value="">—</option>
+              <option>Alive</option><option>Dead</option><option>Abandoned</option><option>Unknown</option>
             </select>
-          </Field>
-          <Field label="Father attended">
-            <select {...register('father_life_skills', { setValueAs: v => v === 'true' })} style={inp()}>
-              <option value="false">No</option><option value="true">Yes</option>
-            </select>
-          </Field>
+          </F>
+          <F label="Occupation">
+            <input style={inp} value={str('mother_occupation')} onChange={e => set('mother_occupation', e.target.value)} />
+          </F>
+          <F label="Monthly Income (₹)">
+            <input style={inp} value={str('mother_earnings')} onChange={e => set('mother_earnings', e.target.value)} />
+          </F>
+          <F label="Health">
+            <input style={inp} value={str('mother_health')} onChange={e => set('mother_health', e.target.value)} />
+          </F>
         </div>
 
-        <Sec title="Special remarks" />
-        <Field label="Observations / family changes">
-          <textarea {...register('special_remarks')} style={{ ...inp(), minHeight: 70, resize: 'vertical' }} placeholder="Detailed observations about family situation, child's progress…" />
-        </Field>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <Field label="Social worker name">
-            <input {...register('recorded_by_name')} style={inp()} />
-          </Field>
-          <Field label="Visit date">
-            <input type="date" {...register('visit_date')} style={inp()} />
-          </Field>
+        <Sec title="Financial & Housing" />
+        <div style={g2}>
+          <F label="Rent / Month (₹)">
+            <input style={inp} value={str('rent_per_month')} onChange={e => set('rent_per_month', e.target.value)} />
+          </F>
+          <F label="No. of Dependents">
+            <input style={inp} value={str('num_dependents')} onChange={e => set('num_dependents', e.target.value)} />
+          </F>
         </div>
+        <F label="Debts">
+          <input style={inp} value={str('debts')} onChange={e => set('debts', e.target.value)} />
+        </F>
 
-        {/* Changed fields summary */}
-        {changedFields.size > 0 && (
-          <div style={{ background: '#faeeda', border: '0.5px solid #ef9f27', borderRadius: 10, padding: '9px 11px', marginBottom: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: '#854f0b', marginBottom: 4 }}>
-              {changedFields.size} field(s) will be updated in main record:
-            </div>
-            <div style={{ fontSize: 11, color: '#854f0b' }}>{[...changedFields].join(', ')}</div>
+        <Sec title="Documents" />
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: '#666', marginBottom: 6 }}>
+            Attach progress report, visit photo, or any relevant document
           </div>
-        )}
+          <DocumentUpload
+            childId={id!}
+            category="follow_up"
+            documentType="progress_card"
+            yearLabel={str('year_label') || undefined}
+            onSuccess={(_, url) => {
+              const name = url.split('/').pop() || 'document'
+              setUploadedDocs(prev => [...prev, { name, url }])
+              toast.success('Document attached')
+            }}
+          />
+          {uploadedDocs.length > 0 && (
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {uploadedDocs.map((doc, i) => (
+                <div key={i} style={{ fontSize: 11, color: '#1a6b4a', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Paperclip size={11} />
+                  {doc.name}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-        <button type="submit" disabled={saving} style={{
-          width: '100%', padding: 12, background: saving ? '#5dcaa5' : '#1a6b4a', color: '#fff',
-          border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit'
-        }}>
-          {saving ? 'Saving…' : `Save & Update Child Record${changedFields.size > 0 ? ` (${changedFields.size} changes)` : ''}`}
+        <Sec title="Social Worker Notes" />
+        <F label="Special Remarks / Observations">
+          <textarea style={ta} value={str('special_remarks')} onChange={e => set('special_remarks', e.target.value)} placeholder="Key observations from this visit…" />
+        </F>
+        <div style={g2}>
+          <F label="Recorded by">
+            <input style={inp} value={str('recorded_by_name')} onChange={e => set('recorded_by_name', e.target.value)} />
+          </F>
+          <F label="Verified by">
+            <input style={inp} value={str('verified_by')} onChange={e => set('verified_by', e.target.value)} />
+          </F>
+        </div>
+      </div>
+
+      {/* Submit bar */}
+      <div style={{ position: 'fixed', bottom: 68, left: 0, right: 0, background: '#fff', borderTop: '1px solid #e5e5e5', padding: '10px 14px', display: 'flex', gap: 10, zIndex: 250 }}>
+        <button onClick={() => navigate(`/children/${id}`)} style={{ padding: '12px 18px', background: '#f0f0f0', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+          Cancel
         </button>
-        <button type="button" onClick={() => navigate(`/children/${id}`)} style={{
-          width: '100%', padding: 11, background: 'transparent', color: '#1a6b4a',
-          border: '1px solid #1a6b4a', borderRadius: 10, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', marginTop: 8
-        }}>Cancel</button>
-      </form>
+        <button onClick={handleSave} disabled={saving} style={{ flex: 1, padding: '12px', background: saving ? '#5dcaa5' : G, color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          {saving ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={16} />}
+          {saving ? 'Saving…' : 'Save Follow-up'}
+        </button>
+      </div>
+
+      <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
     </div>
   )
 }

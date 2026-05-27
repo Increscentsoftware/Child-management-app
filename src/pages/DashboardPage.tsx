@@ -2,62 +2,248 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
-import { 
-  Users, UserPlus, Settings, FileText, LogOut, Menu, X, 
-  Search, AlertTriangle, Wine, GraduationCap
+import {
+  Users, BookOpen, Trophy, Gift, AlertTriangle, Wine, GraduationCap,
+  Menu, X, Search, TrendingUp, Heart, Home, Briefcase, LogOut,
+  Settings, FileText, PlusCircle, Upload, Shield
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-interface Stats {
+interface AnalyticsStats {
   total_children: number
   active_children: number
-  by_category: Record<string, number>
+  past_students: number
+  external_students: number
+  college_students: number
+  
+  // Academic
+  top_academic_performers: any[]
+  
+  // Sports
+  top_sports_performers: any[]
+  
+  // Gifts
+  children_received_gifts: number
+  children_no_gifts: number
+  
+  // Health & Nutrition
+  avg_height: number
+  avg_weight: number
+  underweight_count: number
+  malnourished_count: number
+  
+  // Education
   by_class: Record<string, number>
-  by_sex: Record<string, number>
-  father_status: Record<string, number>
+  by_education: Record<string, number>
+  
+  // Parental
+  father_alive: number
+  father_deceased: number
+  father_abandoned: number
+  mother_alive: number
+  working_parents: number
+  
+  // Family
+  single_parent: number
+  both_parents_alive: number
+  
+  // Category
+  by_category: Record<string, number>
+  
+  // DV Cases
   dv_cases: number
-  father_alcoholic: number
+  
+  // Life Skills
+  life_skills_trained: number
+  
+  // Financial
+  avg_income: number
+  families_in_debt: number
+  
+  // Special Needs
+  special_needs_count: number
 }
 
-interface Child {
-  id: string
-  school_id: string
-  full_name: string
-  present_class: string
-  category: string
-  sex: string
-  father_status: string
-  data_json: any
+// Stat Card Component
+function MetricCard({ 
+  title, 
+  value, 
+  subtitle,
+  icon: Icon, 
+  color, 
+  bgColor 
+}: any) {
+  return (
+    <div style={{
+      background: '#fff',
+      borderRadius: '14px',
+      padding: '18px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+      border: '1px solid #f0f0f0',
+      transition: 'all 0.3s ease'
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.12)'
+      e.currentTarget.style.transform = 'translateY(-4px)'
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)'
+      e.currentTarget.style.transform = 'translateY(0)'
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{
+          width: 44,
+          height: 44,
+          borderRadius: '10px',
+          background: bgColor,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <Icon size={22} color={color} />
+        </div>
+      </div>
+      <div style={{ fontSize: 11, color: '#666', marginTop: 12, marginBottom: 4, fontWeight: 500 }}>
+        {title}
+      </div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: '#111', marginBottom: 4 }}>
+        {typeof value === 'number' ? value.toLocaleString() : value}
+      </div>
+      {subtitle && (
+        <div style={{ fontSize: 11, color: '#999' }}>{subtitle}</div>
+      )}
+    </div>
+  )
 }
 
-export default function DashboardPage() {
+// Progress Bar Component
+function ProgressMetric({ label, value, total, color }: any) {
+  const percentage = (value / total) * 100
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontSize: 12, color: '#666', fontWeight: 500 }}>{label}</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: '#111' }}>{value} ({Math.round(percentage)}%)</span>
+      </div>
+      <div style={{
+        height: 8,
+        background: '#f0f0f0',
+        borderRadius: 4,
+        overflow: 'hidden'
+      }}>
+        <div style={{
+          height: '100%',
+          width: `${percentage}%`,
+          background: color,
+          transition: 'width 0.5s ease'
+        }} />
+      </div>
+    </div>
+  )
+}
+
+// Top Performers Component
+function TopPerformers({ title, performers, color, icon: Icon }: any) {
+  return (
+    <div style={{
+      background: '#fff',
+      borderRadius: '14px',
+      padding: '20px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+      border: '1px solid #f0f0f0'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <div style={{ width: 32, height: 32, borderRadius: '8px', background: `${color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon size={18} color={color} />
+        </div>
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: '#111', margin: 0 }}>{title}</h3>
+      </div>
+      {performers && performers.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {performers.slice(0, 5).map((performer: any, idx: number) => (
+            <div key={idx} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              paddingBottom: 10,
+              borderBottom: idx < Math.min(4, performers.length - 1) ? '1px solid #f0f0f0' : 'none'
+            }}>
+              <div style={{
+                width: 28,
+                height: 28,
+                borderRadius: '6px',
+                background: color,
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 12,
+                fontWeight: 700
+              }}>
+                #{idx + 1}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#111' }}>{performer.name}</div>
+                <div style={{ fontSize: 11, color: '#999' }}>{performer.subtitle}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: '#999', textAlign: 'center', padding: '20px 0' }}>
+          No data yet
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function AnalyticsDashboard() {
   const navigate = useNavigate()
   const { user, logout } = useAppStore()
-  const [stats, setStats] = useState<Stats>({
+  const [stats, setStats] = useState<AnalyticsStats>({
     total_children: 0,
     active_children: 0,
-    by_category: {},
+    past_students: 0,
+    external_students: 0,
+    college_students: 0,
+    top_academic_performers: [],
+    top_sports_performers: [],
+    children_received_gifts: 0,
+    children_no_gifts: 0,
+    avg_height: 0,
+    avg_weight: 0,
+    underweight_count: 0,
+    malnourished_count: 0,
     by_class: {},
-    by_sex: {},
-    father_status: {},
+    by_education: {},
+    father_alive: 0,
+    father_deceased: 0,
+    father_abandoned: 0,
+    mother_alive: 0,
+    working_parents: 0,
+    single_parent: 0,
+    both_parents_alive: 0,
+    by_category: {},
     dv_cases: 0,
-    father_alcoholic: 0
+    life_skills_trained: 0,
+    avg_income: 0,
+    families_in_debt: 0,
+    special_needs_count: 0
   })
   const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<Child[]>([])
-  const [searching, setSearching] = useState(false)
 
   useEffect(() => {
     if (!user) {
       navigate('/login')
       return
     }
-    loadStats()
+    loadAnalytics()
   }, [user])
 
-  const loadStats = async () => {
+  const loadAnalytics = async () => {
     try {
       const { data: children, error } = await supabase
         .from('children')
@@ -67,82 +253,111 @@ export default function DashboardPage() {
 
       const total = children?.length || 0
       const active = children?.filter(c => c.is_active)?.length || 0
-      
-      const byCategory: Record<string, number> = {}
-      children?.forEach(c => {
-        const cat = c.category || 'Unknown'
-        byCategory[cat] = (byCategory[cat] || 0) + 1
-      })
+
+      let pastStudents = 0, externalStudents = 0, collegeStudents = 0
+      let totalHeight = 0, totalWeight = 0
+      let underweight = 0, malnourished = 0, heightCount = 0, weightCount = 0
+      let fatherAlive = 0, fatherDeceased = 0, fatherAbandoned = 0
+      let motherAlive = 0, workingParents = 0, singleParent = 0, bothParents = 0
+      let dvCases = 0, lifeSkills = 0, totalIncome = 0, inDebt = 0, specialNeeds = 0
 
       const byClass: Record<string, number> = {}
-      children?.forEach(c => {
-        const cls = c.present_class || 'Unknown'
-        byClass[cls] = (byClass[cls] || 0) + 1
+      const byCategory: Record<string, number> = {}
+      const byEducation: Record<string, number> = {}
+
+      children?.forEach((c: any) => {
+        // Student status — check child_type, lifecycle_status, and imported data_json
+        const ct = String(c.child_type || '')
+        const ls = String(c.lifecycle_status || '').toLowerCase()
+        const ds = String(c.data_json?.student_status || '')
+        if (ct === 'alumni' || ls.includes('past') || ds.toLowerCase().includes('past')) pastStudents++
+        if (ct === 'sponsored_external' || ds.toLowerCase() === 'external') externalStudents++
+        if (ls.includes('college') || ds.toLowerCase() === 'college') collegeStudents++
+
+        // Health — fields stored as strings, must parse
+        const h = parseFloat(c.height_cm || '0')
+        const w = parseFloat(c.weight_kg || '0')
+        if (h > 0) { totalHeight += h; heightCount++ }
+        if (w > 0) { totalWeight += w; weightCount++ }
+        if (h > 0 && w > 0) {
+          const bmi = w / ((h / 100) ** 2)
+          if (bmi < 18.5) underweight++
+        }
+        if (w > 0 && w < 30) malnourished++
+
+        // Parents
+        if (c.father_status === 'Alive') fatherAlive++
+        else if (c.father_status === 'Dead') fatherDeceased++
+        else if (c.father_status === 'Abandoned') fatherAbandoned++
+        if (c.mother_status === 'Alive') motherAlive++
+        if ((c.father_occupation && c.father_occupation !== 'Unemployed') ||
+            (c.mother_occupation && c.mother_occupation !== 'Unemployed')) workingParents++
+        if (c.father_status !== 'Alive' || c.mother_status !== 'Alive') singleParent++
+        if (c.father_status === 'Alive' && c.mother_status === 'Alive') bothParents++
+
+        // DV & life skills
+        if (c.father_dv || c.mother_dv) dvCases++
+        if (c.mother_life_skills || c.father_life_skills) lifeSkills++
+
+        // Financial — prefer follow-up earnings, fall back to admission avg
+        const fi = parseFloat(c.father_earnings || c.avg_income_father || '0')
+        const mi = parseFloat(c.mother_earnings || c.avg_income_mother || '0')
+        totalIncome += fi + mi
+        if (c.debts && String(c.debts).trim() !== '') inDebt++
+
+        if (c.normal_or_special === 'Special') specialNeeds++
+
+        if (c.present_class) byClass[c.present_class] = (byClass[c.present_class] || 0) + 1
+        if (c.category) byCategory[c.category] = (byCategory[c.category] || 0) + 1
+        if (c.father_education) byEducation[c.father_education] = (byEducation[c.father_education] || 0) + 1
       })
 
-      const bySex: Record<string, number> = {}
-      children?.forEach(c => {
-        const sex = c.sex || 'Unknown'
-        bySex[sex] = (bySex[sex] || 0) + 1
-      })
-
-      const fatherStatus: Record<string, number> = {}
-      children?.forEach(c => {
-        const status = c.father_status || 'Unknown'
-        fatherStatus[status] = (fatherStatus[status] || 0) + 1
-      })
-
-      const dvCases = children?.filter(c => 
-        c.father_dv === true || c.mother_dv === true
-      )?.length || 0
-
-      const fatherAlcoholic = children?.filter(c => 
-        c.father_habits && (
-          c.father_habits.includes('Alcoholic') || 
-          c.father_habits.includes('Drinking')
-        )
-      )?.length || 0
+      // Top academics: active children sorted by highest class
+      const classLevel = (cls: string): number => {
+        const m = cls.match(/(\d+)/)
+        return m ? parseInt(m[1]) : (cls.toLowerCase().includes('prep') ? 0 : -1)
+      }
+      const topAcademic = [...(children || [])]
+        .filter(c => c.present_class && c.is_active)
+        .sort((a, b) => classLevel(b.present_class) - classLevel(a.present_class))
+        .slice(0, 5)
+        .map(c => ({ name: c.full_name, subtitle: `${c.present_class} · ID: ${c.school_id}` }))
 
       setStats({
         total_children: total,
         active_children: active,
-        by_category: byCategory,
+        past_students: pastStudents,
+        external_students: externalStudents,
+        college_students: collegeStudents,
+        top_academic_performers: topAcademic,
+        top_sports_performers: [],
+        children_received_gifts: 0,
+        children_no_gifts: 0,
+        avg_height: heightCount > 0 ? totalHeight / heightCount : 0,
+        avg_weight: weightCount > 0 ? totalWeight / weightCount : 0,
+        underweight_count: underweight,
+        malnourished_count: malnourished,
         by_class: byClass,
-        by_sex: bySex,
-        father_status: fatherStatus,
+        by_education: byEducation,
+        father_alive: fatherAlive,
+        father_deceased: fatherDeceased,
+        father_abandoned: fatherAbandoned,
+        mother_alive: motherAlive,
+        working_parents: workingParents,
+        single_parent: singleParent,
+        both_parents_alive: bothParents,
+        by_category: byCategory,
         dv_cases: dvCases,
-        father_alcoholic: fatherAlcoholic
+        life_skills_trained: lifeSkills,
+        avg_income: total > 0 ? totalIncome / total : 0,
+        families_in_debt: inDebt,
+        special_needs_count: specialNeeds
       })
     } catch (error) {
-      console.error('Error loading stats:', error)
-      toast.error('Failed to load statistics')
+      console.error('Error loading analytics:', error)
+      toast.error('Failed to load analytics')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleSearch = async (query: string) => {
-    setSearchQuery(query)
-    
-    if (!query.trim()) {
-      setSearchResults([])
-      return
-    }
-
-    setSearching(true)
-    try {
-      const { data, error } = await supabase
-        .from('children')
-        .select('*')
-        .or(`full_name.ilike.%${query}%,school_id.ilike.%${query}%`)
-        .limit(10)
-
-      if (error) throw error
-      setSearchResults(data || [])
-    } catch (error) {
-      console.error('Search error:', error)
-    } finally {
-      setSearching(false)
     }
   }
 
@@ -159,43 +374,34 @@ export default function DashboardPage() {
 
   const isAdmin = user?.role === 'admin'
 
-  const totalForPie = Object.values(stats.by_category).reduce((a, b) => a + b, 0)
-  const categoryPercentages = Object.entries(stats.by_category).map(([key, value]) => ({
-    label: key,
-    value,
-    percentage: totalForPie > 0 ? (value / totalForPie * 100) : 0,
-    color: key === 'Category I' ? '#dc2626' : 
-           key === 'Category II' ? '#ea580c' : 
-           key === 'Category III' ? '#f59e0b' : '#10b981'
-  }))
-
   return (
-    <div style={{ fontFamily: "'DM Sans', sans-serif", minHeight: '100vh', background: '#f5f5f5' }}>
-      {/* Header WITHOUT Home Button */}
+    <div style={{ fontFamily: "'DM Sans', sans-serif", minHeight: '100vh', background: '#f8f9fc' }}>
+      {/* Header */}
       <div style={{ 
-        background: '#1a6b4a', 
+        background: 'linear-gradient(135deg, #1a6b4a 0%, #0f5a3f 100%)',
         color: '#fff', 
-        padding: '14px 16px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        padding: '20px 24px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
         position: 'sticky',
         top: 0,
         zIndex: 10
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          {/* Title - Left/Center */}
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: 18 }}>Analytics Dashboard</div>
-            <div style={{ fontSize: 12, opacity: 0.9 }}>{user?.full_name || 'Admin User'}</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, marginBottom: 4 }}>
+              📊 Shishu Mandir Analytics Dashboard
+            </h1>
+            <p style={{ fontSize: 13, opacity: 0.9, margin: 0 }}>
+              Comprehensive insights on every child's journey
+            </p>
           </div>
-          
-          {/* Menu Button - Right */}
           <button
             onClick={() => setMenuOpen(!menuOpen)}
             style={{
               background: 'rgba(255,255,255,0.2)',
               border: 'none',
               color: '#fff',
-              padding: 8,
+              padding: '10px 12px',
               borderRadius: 8,
               cursor: 'pointer',
               display: 'flex',
@@ -205,99 +411,12 @@ export default function DashboardPage() {
             {menuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
-
-        {/* Search Bar */}
-        <div style={{ position: 'relative' }}>
-          <Search 
-            size={18} 
-            style={{ 
-              position: 'absolute', 
-              left: 12, 
-              top: '50%', 
-              transform: 'translateY(-50%)',
-              color: '#888'
-            }} 
-          />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Search children by name or ID..."
-            style={{
-              width: '100%',
-              padding: '10px 12px 10px 40px',
-              border: 'none',
-              borderRadius: 8,
-              fontSize: 14,
-              background: '#fff',
-              boxSizing: 'border-box'
-            }}
-          />
-          
-          {searchQuery && (
-            <div style={{
-              position: 'absolute',
-              top: '100%',
-              left: 0,
-              right: 0,
-              marginTop: 4,
-              background: '#fff',
-              borderRadius: 8,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              maxHeight: 300,
-              overflowY: 'auto',
-              zIndex: 20
-            }}>
-              {searching ? (
-                <div style={{ padding: 16, textAlign: 'center', color: '#888' }}>
-                  Searching...
-                </div>
-              ) : searchResults.length > 0 ? (
-                searchResults.map(child => (
-                  <div
-                    key={child.id}
-                    onClick={() => {
-                      navigate(`/children/${child.id}`)
-                      setSearchQuery('')
-                      setSearchResults([])
-                    }}
-                    style={{
-                      padding: '12px 16px',
-                      borderBottom: '1px solid #f0f0f0',
-                      cursor: 'pointer',
-                      transition: 'background 0.2s'
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#f5f5f5'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{child.full_name}</div>
-                    <div style={{ fontSize: 12, color: '#888' }}>
-                      ID: {child.school_id} • {child.present_class} • {child.category}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div style={{ padding: 16, textAlign: 'center', color: '#888' }}>
-                  No results found
-                </div>
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Sliding Menu */}
+      {/* Menu */}
       {menuOpen && (
         <>
-          <div 
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,0.5)',
-              zIndex: 50
-            }}
-            onClick={() => setMenuOpen(false)}
-          />
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50 }} onClick={() => setMenuOpen(false)} />
           <div style={{
             position: 'fixed',
             top: 0,
@@ -308,573 +427,157 @@ export default function DashboardPage() {
             boxShadow: '-2px 0 8px rgba(0,0,0,0.1)',
             zIndex: 51,
             padding: 20,
-            overflowY: 'auto'
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0
           }}>
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
-                {user?.full_name || 'Admin User'}
+            {/* User profile */}
+            <div style={{ padding: '4px 0 20px', borderBottom: '1px solid #f0f0f0', marginBottom: 16 }}>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#e1f5ee', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                <Users size={22} color="#1a6b4a" />
               </div>
-              <div style={{ fontSize: 12, color: '#888' }}>
-                {isAdmin ? 'Administrator' : 'User'}
-              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#111' }}>{user?.full_name || 'User'}</div>
+              <div style={{ fontSize: 12, color: '#888', marginTop: 2, textTransform: 'capitalize' }}>{user?.role === 'admin' ? 'Administrator' : user?.role?.replace('_', ' ') || 'Staff'}</div>
             </div>
 
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button
-                onClick={() => { navigate('/children'); setMenuOpen(false) }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
-                  background: '#f5f5f5', border: 'none', borderRadius: 8, cursor: 'pointer',
-                  fontSize: 14, fontWeight: 500, color: '#111', textAlign: 'left'
-                }}
-              >
-                <Users size={18} />
-                View All Children
+            {/* Main nav */}
+            <nav style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <button onClick={() => { navigate('/children'); setMenuOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#f5f5f5', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 500, color: '#111', textAlign: 'left', fontFamily: 'inherit' }}>
+                <Users size={18} /> View All Children
+              </button>
+              <button onClick={() => { navigate('/children/add'); setMenuOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#1a6b4a', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'left', fontFamily: 'inherit' }}>
+                <PlusCircle size={18} /> Add New Child
+              </button>
+              <button onClick={() => { navigate('/import'); setMenuOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#f5f5f5', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 500, color: '#111', textAlign: 'left', fontFamily: 'inherit' }}>
+                <Upload size={18} /> Import Excel
               </button>
 
-              <button
-                onClick={() => { navigate('/children/add'); setMenuOpen(false) }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
-                  background: '#1a6b4a', border: 'none', borderRadius: 8, cursor: 'pointer',
-                  fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'left'
-                }}
-              >
-                <UserPlus size={18} />
-                Add New Child
-              </button>
-
-              <button
-                onClick={() => { navigate('/import'); setMenuOpen(false) }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
-                  background: '#f5f5f5', border: 'none', borderRadius: 8, cursor: 'pointer',
-                  fontSize: 14, fontWeight: 500, color: '#111', textAlign: 'left'
-                }}
-              >
-                <FileText size={18} />
-                Import Excel
-              </button>
-
+              {/* Admin section */}
               {isAdmin && (
                 <>
-                  <div style={{ height: 1, background: '#e5e5e5', margin: '12px 0' }} />
-                  
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 4, marginLeft: 4 }}>
-                    ADMIN
-                  </div>
-
-                  <button
-                    onClick={() => { navigate('/admin/users'); setMenuOpen(false) }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
-                      background: '#f5f5f5', border: 'none', borderRadius: 8, cursor: 'pointer',
-                      fontSize: 14, fontWeight: 500, color: '#111', textAlign: 'left'
-                    }}
-                  >
-                    <Users size={18} />
-                    User Management
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#999', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '14px 4px 6px' }}>Admin</div>
+                  <button onClick={() => { navigate('/admin/users'); setMenuOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#f5f5f5', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 500, color: '#111', textAlign: 'left', fontFamily: 'inherit' }}>
+                    <Shield size={18} /> User Management
                   </button>
-
-                  <button
-                    onClick={() => { navigate('/admin/form-fields'); setMenuOpen(false) }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
-                      background: '#f5f5f5', border: 'none', borderRadius: 8, cursor: 'pointer',
-                      fontSize: 14, fontWeight: 500, color: '#111', textAlign: 'left'
-                    }}
-                  >
-                    <Settings size={18} />
-                    Form Fields
+                  <button onClick={() => { navigate('/admin/form-fields'); setMenuOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#f5f5f5', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 500, color: '#111', textAlign: 'left', fontFamily: 'inherit' }}>
+                    <Settings size={18} /> Form Fields
                   </button>
                 </>
               )}
 
-              <div style={{ height: 1, background: '#e5e5e5', margin: '12px 0' }} />
-
-              <button
-                onClick={handleLogout}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
-                  background: '#fee2e2', border: 'none', borderRadius: 8, cursor: 'pointer',
-                  fontSize: 14, fontWeight: 500, color: '#dc2626', textAlign: 'left'
-                }}
-              >
-                <LogOut size={18} />
-                Logout
-              </button>
+              <div style={{ borderTop: '1px solid #f0f0f0', marginTop: 8, paddingTop: 8 }}>
+                <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#fee2e2', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 500, color: '#dc2626', textAlign: 'left', fontFamily: 'inherit', width: '100%' }}>
+                  <LogOut size={18} /> Logout
+                </button>
+              </div>
             </nav>
           </div>
         </>
       )}
 
-      {/* Main Content */}
-      <div style={{ padding: '20px 16px 100px' }}>
-        {/* Key Stats Cards with Icons */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', 
-          gap: 12,
-          marginBottom: 24
-        }}>
-          {/* Total Children */}
-          <div style={{
-            background: 'linear-gradient(135deg, #1a6b4a 0%, #15563c 100%)',
-            borderRadius: 12,
-            padding: 16,
-            boxShadow: '0 2px 8px rgba(26,107,74,0.2)',
-            color: '#fff'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div style={{ 
-                background: 'rgba(255,255,255,0.2)', 
-                padding: 8, 
-                borderRadius: 8,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Users size={20} />
-              </div>
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>
-              {loading ? '...' : stats.total_children}
-            </div>
-            <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2 }}>
-              Total Children
-            </div>
+      {/* Content */}
+      <div style={{ padding: '24px 16px 100px' }}>
+        {/* Overview Metrics */}
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 14, marginTop: 0 }}>📈 Overview</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+            <MetricCard title="Total Children" value={stats.total_children} icon={Users} color="#1a6b4a" bgColor="#e1f5ee" />
+            <MetricCard title="Active Students" value={stats.active_children} icon={GraduationCap} color="#0891b2" bgColor="#e0f2fe" />
+            <MetricCard title="Past Students" value={stats.past_students} icon={BookOpen} color="#7c3aed" bgColor="#f3e8ff" />
+            <MetricCard title="College Bound" value={stats.college_students} icon={Trophy} color="#dc2626" bgColor="#fee2e2" />
+            <MetricCard title="External Students" value={stats.external_students} icon={Home} color="#ea580c" bgColor="#fed7aa" />
+            <MetricCard title="Special Needs" value={stats.special_needs_count} icon={Heart} color="#ec4899" bgColor="#ffe0f0" />
           </div>
+        </div>
 
-          {/* DV Cases */}
-          <div style={{
-            background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
-            borderRadius: 12,
-            padding: 16,
-            boxShadow: '0 2px 8px rgba(220,38,38,0.2)',
-            color: '#fff'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div style={{ 
-                background: 'rgba(255,255,255,0.2)', 
-                padding: 8, 
-                borderRadius: 8,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <AlertTriangle size={20} />
-              </div>
+        {/* Academics */}
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 14, marginTop: 0 }}>🎓 Academics</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+            <div style={{ background: '#fff', borderRadius: '14px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14, marginTop: 0, color: '#111' }}>Class Distribution</h3>
+              {Object.entries(stats.by_class).length > 0
+                ? Object.entries(stats.by_class)
+                    .sort((a, b) => {
+                      const n = (s: string) => { const m = s.match(/(\d+)/); return m ? parseInt(m[1]) : 0 }
+                      return n(b[0]) - n(a[0])
+                    })
+                    .slice(0, 6)
+                    .map(([cls, count]: any) => (
+                      <ProgressMetric key={cls} label={cls} value={count} total={stats.total_children} color="#1a6b4a" />
+                    ))
+                : <div style={{ fontSize: 12, color: '#999', padding: '12px 0' }}>No class data yet</div>
+              }
             </div>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>
-              {loading ? '...' : stats.dv_cases}
-            </div>
-            <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2 }}>
-              DV Cases
-            </div>
+            <TopPerformers title="🏆 Top Class (Senior-most Active)" performers={stats.top_academic_performers} color="#1a6b4a" icon={Trophy} />
           </div>
+        </div>
 
-          {/* Father Alcoholic */}
-          <div style={{
-            background: 'linear-gradient(135deg, #ea580c 0%, #c2410c 100%)',
-            borderRadius: 12,
-            padding: 16,
-            boxShadow: '0 2px 8px rgba(234,88,12,0.2)',
-            color: '#fff'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div style={{ 
-                background: 'rgba(255,255,255,0.2)', 
-                padding: 8, 
-                borderRadius: 8,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Wine size={20} />
-              </div>
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>
-              {loading ? '...' : stats.father_alcoholic}
-            </div>
-            <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2 }}>
-              Father Alcoholic
-            </div>
+        {/* Health & Wellness */}
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 14, marginTop: 0 }}>🏥 Health & Nutrition</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+            <MetricCard title="Avg Height" value={`${stats.avg_height.toFixed(1)} cm`} icon={Users} color="#3b82f6" bgColor="#eff6ff" />
+            <MetricCard title="Avg Weight" value={`${stats.avg_weight.toFixed(1)} kg`} icon={Heart} color="#ef4444" bgColor="#fee2e2" />
+            <MetricCard title="Underweight" value={stats.underweight_count} subtitle={`${((stats.underweight_count / stats.total_children) * 100).toFixed(1)}% of total`} icon={AlertTriangle} color="#ea580c" bgColor="#fed7aa" />
+            <MetricCard title="Malnourished" value={stats.malnourished_count} subtitle={`Need attention`} icon={Heart} color="#dc2626" bgColor="#fee2e2" />
+
           </div>
+        </div>
 
-          {/* Active Students */}
-          <div style={{
-            background: 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)',
-            borderRadius: 12,
-            padding: 16,
-            boxShadow: '0 2px 8px rgba(8,145,178,0.2)',
-            color: '#fff'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div style={{ 
-                background: 'rgba(255,255,255,0.2)', 
-                padding: 8, 
-                borderRadius: 8,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <GraduationCap size={20} />
+        {/* Family Status */}
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 14, marginTop: 0 }}>👨‍👩‍👧‍👦 Family Status</h2>
+          <div style={{ background: '#fff', borderRadius: '14px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+              <div>
+                <ProgressMetric label="Both Parents Alive" value={stats.both_parents_alive} total={stats.total_children} color="#10b981" />
+                <ProgressMetric label="Single Parent" value={stats.single_parent} total={stats.total_children} color="#f59e0b" />
               </div>
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>
-              {loading ? '...' : stats.active_children}
-            </div>
-            <div style={{ fontSize: 11, opacity: 0.9, marginTop: 2 }}>
-              Active Students
+              <div>
+                <ProgressMetric label="Father Alive" value={stats.father_alive} total={stats.total_children} color="#3b82f6" />
+                <ProgressMetric label="Father Deceased" value={stats.father_deceased} total={stats.total_children} color="#ef4444" />
+                <ProgressMetric label="Father Abandoned" value={stats.father_abandoned} total={stats.total_children} color="#8b5cf6" />
+              </div>
+              <div>
+                <ProgressMetric label="Mother Alive" value={stats.mother_alive} total={stats.total_children} color="#ec4899" />
+                <ProgressMetric label="Working Parents" value={stats.working_parents} total={stats.total_children} color="#1a6b4a" />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Charts Row */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
-          gap: 16,
-          marginBottom: 24
-        }}>
-          {/* Category Pie Chart */}
-          <div style={{ 
-            background: '#fff', 
-            borderRadius: 12, 
-            padding: 20, 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)' 
-          }}>
-            <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: '#111' }}>
-              Children by Category
-            </h3>
-            
-            {totalForPie > 0 ? (
-              <>
-                <div style={{ position: 'relative', width: 200, height: 200, margin: '0 auto' }}>
-                  <svg viewBox="0 0 200 200" style={{ transform: 'rotate(-90deg)' }}>
-                    {categoryPercentages.map((cat, idx) => {
-                      const prevPercentage = categoryPercentages
-                        .slice(0, idx)
-                        .reduce((sum, c) => sum + c.percentage, 0)
-                      const circumference = 2 * Math.PI * 80
-                      const offset = circumference - (cat.percentage / 100) * circumference
-                      const rotation = (prevPercentage / 100) * 360
+        {/* Category & Risk */}
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 14, marginTop: 0 }}>⚠️ Risk & Category</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+            <div style={{ background: '#fff', borderRadius: '14px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14, margin: 0, color: '#111' }}>Category Distribution</h3>
+              {Object.entries(stats.by_category).map(([cat, count]: any) => (
+                <ProgressMetric key={cat} label={cat} value={count} total={stats.total_children} color={cat === 'Category I' ? '#dc2626' : cat === 'Category II' ? '#ea580c' : '#10b981'} />
+              ))}
+            </div>
 
-                      return (
-                        <circle
-                          key={cat.label}
-                          cx="100"
-                          cy="100"
-                          r="80"
-                          fill="none"
-                          stroke={cat.color}
-                          strokeWidth="40"
-                          strokeDasharray={circumference}
-                          strokeDashoffset={offset}
-                          style={{
-                            transformOrigin: 'center',
-                            transform: `rotate(${rotation}deg)`
-                          }}
-                        />
-                      )
-                    })}
-                  </svg>
-                </div>
+            <div style={{ background: '#fff', borderRadius: '14px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14, margin: 0, color: '#111' }}>Risk Indicators</h3>
+              <ProgressMetric label="DV Cases" value={stats.dv_cases} total={stats.total_children} color="#dc2626" />
+              <ProgressMetric label="Families in Debt" value={stats.families_in_debt} total={stats.total_children} color="#ea580c" />
+              <ProgressMetric label="Life Skills Trained" value={stats.life_skills_trained} total={stats.total_children} color="#10b981" />
+            </div>
 
-                <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {categoryPercentages.map(cat => (
-                    <div key={cat.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ 
-                        width: 12, 
-                        height: 12, 
-                        borderRadius: 3, 
-                        background: cat.color 
-                      }} />
-                      <span style={{ fontSize: 12, flex: 1 }}>{cat.label}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600 }}>
-                        {cat.value} ({cat.percentage.toFixed(0)}%)
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                No data available
-              </div>
-            )}
-          </div>
-
-          {/* Father Status Bar Chart */}
-          <div style={{ 
-            background: '#fff', 
-            borderRadius: 12, 
-            padding: 20, 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)' 
-          }}>
-            <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: '#111' }}>
-              Father Status Distribution
-            </h3>
-            
-            {Object.keys(stats.father_status).length > 0 ? (
-              <div style={{ 
-                height: 200, 
-                display: 'flex', 
-                alignItems: 'flex-end', 
-                gap: 12,
-                padding: '0 10px'
-              }}>
-                {Object.entries(stats.father_status).map(([status, count]) => {
-                  const maxCount = Math.max(...Object.values(stats.father_status))
-                  const heightPercent = maxCount > 0 ? (count / maxCount) * 100 : 0
-
-                  return (
-                    <div key={status} style={{ flex: 1, textAlign: 'center' }}>
-                      <div style={{ 
-                        fontSize: 11, 
-                        fontWeight: 600, 
-                        marginBottom: 4,
-                        color: '#1a6b4a'
-                      }}>
-                        {count}
-                      </div>
-                      <div style={{ 
-                        height: `${heightPercent}%`, 
-                        minHeight: count > 0 ? 20 : 5,
-                        background: 'linear-gradient(to top, #1a6b4a, #22c55e)', 
-                        borderRadius: '6px 6px 0 0',
-                        transition: 'height 0.3s ease'
-                      }} />
-                      <div style={{ 
-                        fontSize: 10, 
-                        color: '#666', 
-                        marginTop: 6,
-                        wordBreak: 'break-word'
-                      }}>
-                        {status}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                No data available
-              </div>
-            )}
+            <MetricCard title="Avg Family Income" value={`₹${stats.avg_income.toLocaleString()}`} subtitle="Per month" icon={Briefcase} color="#1a6b4a" bgColor="#e1f5ee" />
           </div>
         </div>
 
-        {/* Class Distribution & Gender */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
-          gap: 16,
-          marginBottom: 24
-        }}>
-          {/* Class Distribution */}
-          <div style={{ 
-            background: '#fff', 
-            borderRadius: 12, 
-            padding: 20, 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)' 
-          }}>
-            <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: '#111' }}>
-              Children by Class
-            </h3>
-            
-            {Object.keys(stats.by_class).length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {Object.entries(stats.by_class)
-                  .sort((a, b) => b[1] - a[1])
-                  .slice(0, 8)
-                  .map(([className, count]) => {
-                    const maxCount = Math.max(...Object.values(stats.by_class))
-                    const widthPercent = maxCount > 0 ? (count / maxCount) * 100 : 0
-
-                    return (
-                      <div key={className}>
-                        <div style={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
-                          marginBottom: 4,
-                          fontSize: 12
-                        }}>
-                          <span style={{ fontWeight: 500 }}>{className}</span>
-                          <span style={{ fontWeight: 600, color: '#1a6b4a' }}>{count}</span>
-                        </div>
-                        <div style={{ 
-                          width: '100%', 
-                          height: 8, 
-                          background: '#f0f0f0', 
-                          borderRadius: 4,
-                          overflow: 'hidden'
-                        }}>
-                          <div style={{ 
-                            width: `${widthPercent}%`, 
-                            height: '100%', 
-                            background: 'linear-gradient(90deg, #1a6b4a, #22c55e)',
-                            transition: 'width 0.3s ease'
-                          }} />
-                        </div>
-                      </div>
-                    )
-                  })}
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                No data available
-              </div>
-            )}
+        {/* Education Distribution */}
+        <div style={{ background: '#fff', borderRadius: '14px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 14, marginTop: 0 }}>📚 Education Levels</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14 }}>
+            {Object.entries(stats.by_education).slice(0, 6).map(([edu, count]: any) => (
+              <MetricCard key={edu} title={edu} value={count} icon={BookOpen} color="#3b82f6" bgColor="#eff6ff" />
+            ))}
           </div>
-
-          {/* Gender Distribution */}
-          <div style={{ 
-            background: '#fff', 
-            borderRadius: 12, 
-            padding: 20, 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)' 
-          }}>
-            <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: '#111' }}>
-              Gender Distribution
-            </h3>
-            
-            {Object.keys(stats.by_sex).length > 0 ? (
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                gap: 40,
-                height: 200
-              }}>
-                {Object.entries(stats.by_sex).map(([sex, count]) => {
-                  const total = Object.values(stats.by_sex).reduce((a, b) => a + b, 0)
-                  const percentage = total > 0 ? (count / total * 100).toFixed(0) : 0
-
-                  return (
-                    <div key={sex} style={{ textAlign: 'center' }}>
-                      <div style={{
-                        width: 100,
-                        height: 100,
-                        borderRadius: '50%',
-                        background: sex === 'Female' ? 
-                          'linear-gradient(135deg, #ec4899, #f97316)' : 
-                          'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#fff',
-                        marginBottom: 12
-                      }}>
-                        <div style={{ fontSize: 28, fontWeight: 700 }}>{count}</div>
-                        <div style={{ fontSize: 11, opacity: 0.9 }}>{percentage}%</div>
-                      </div>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>{sex}</div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
-                No data available
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', 
-          gap: 12 
-        }}>
-          <button
-            onClick={() => navigate('/children/add')}
-            style={{
-              background: '#1a6b4a',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 12,
-              padding: 16,
-              cursor: 'pointer',
-              fontSize: 14,
-              fontWeight: 600,
-              textAlign: 'left',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}
-          >
-            <UserPlus size={24} />
-            Add Child
-          </button>
-
-          <button
-            onClick={() => navigate('/children')}
-            style={{
-              background: '#fff',
-              color: '#111',
-              border: '1px solid #e5e5e5',
-              borderRadius: 12,
-              padding: 16,
-              cursor: 'pointer',
-              fontSize: 14,
-              fontWeight: 600,
-              textAlign: 'left',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8
-            }}
-          >
-            <Users size={24} />
-            View All
-          </button>
-
-          <button
-            onClick={() => navigate('/import')}
-            style={{
-              background: '#fff',
-              color: '#111',
-              border: '1px solid #e5e5e5',
-              borderRadius: 12,
-              padding: 16,
-              cursor: 'pointer',
-              fontSize: 14,
-              fontWeight: 600,
-              textAlign: 'left',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8
-            }}
-          >
-            <FileText size={24} />
-            Import Excel
-          </button>
-
-          {isAdmin && (
-            <button
-              onClick={() => navigate('/admin/users')}
-              style={{
-                background: '#fff',
-                color: '#111',
-                border: '1px solid #e5e5e5',
-                borderRadius: 12,
-                padding: 16,
-                cursor: 'pointer',
-                fontSize: 14,
-                fontWeight: 600,
-                textAlign: 'left',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 8
-              }}
-            >
-              <Settings size={24} />
-              Admin
-            </button>
-          )}
         </div>
       </div>
     </div>
