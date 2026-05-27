@@ -147,8 +147,8 @@ export default function FollowupPage() {
       // Build change log entries for fields that changed from child baseline
       const changeEntries: ChangeLogEntry[] = []
       for (const field of TRACKED_FIELDS) {
-        const newVal = String((followup as Record<string, unknown>)[field.key] ?? '')
-        const oldVal = field.childKey ? String((child as Record<string, unknown>)[field.childKey] ?? '') : ''
+        const newVal = String((followup as unknown as Record<string, unknown>)[field.key] ?? '')
+        const oldVal = field.childKey ? String((child as unknown as Record<string, unknown>)[field.childKey] ?? '') : ''
         if (newVal && newVal !== oldVal) {
           const entry: ChangeLogEntry = {
             id: crypto.randomUUID(),

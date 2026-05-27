@@ -653,7 +653,6 @@ export default function ChildProfilePage() {
               alignItems: 'center',
               gap: 6,
               fontFamily: 'inherit',
-              hover: 'opacity(0.9)'
             }}
           >
             <Trash2 size={14} />
