@@ -107,27 +107,20 @@ TONE GUIDELINES:
 - For questions outside your knowledge, say: "I'm not sure about that — please contact the team at smec@shishumandir.org or call 9379271391."
 - You are an internal tool — not a public chatbot. You can be direct and practical.`
 
-export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 })
-  }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default async function handler(req: any, res: any) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
-  let body: { messages?: unknown }
-  try {
-    body = await req.json()
-  } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400 })
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end()
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const messages = body.messages
-  if (!Array.isArray(messages)) {
-    return new Response(JSON.stringify({ error: 'messages must be an array' }), { status: 400 })
-  }
+  const { messages } = req.body ?? {}
+  if (!Array.isArray(messages)) return res.status(400).json({ error: 'messages must be an array' })
 
   const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'API key not configured' }), { status: 500 })
-  }
+  if (!apiKey) return res.status(500).json({ error: 'API key not configured' })
 
   try {
     const upstream = await fetch('https://api.anthropic.com/v1/messages', {
@@ -148,16 +141,13 @@ export default async function handler(req: Request): Promise<Response> {
     const data = await upstream.json() as { content?: Array<{ text: string }>; error?: { message: string } }
 
     if (!upstream.ok) {
-      return new Response(JSON.stringify({ error: data.error?.message || 'Upstream error' }), { status: 502 })
+      console.error('Anthropic error:', data.error)
+      return res.status(502).json({ error: data.error?.message || 'Upstream error' })
     }
 
-    return new Response(JSON.stringify({ content: data.content?.[0]?.text ?? '' }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  } catch {
-    return new Response(JSON.stringify({ error: 'Internal error' }), { status: 500 })
+    return res.status(200).json({ content: data.content?.[0]?.text ?? '' })
+  } catch (err) {
+    console.error('Chat handler error:', err)
+    return res.status(500).json({ error: 'Internal error' })
   }
 }
-
-export const config = { runtime: 'edge' }
