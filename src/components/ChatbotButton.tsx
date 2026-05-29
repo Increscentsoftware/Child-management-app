@@ -67,12 +67,13 @@ export default function ChatbotButton() {
         body: JSON.stringify({ messages: newMessages }),
       })
       const data = await res.json() as { content?: string; error?: string }
-      if (!res.ok) throw new Error(data.error || 'Request failed')
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
       setMessages(prev => [...prev, { role: 'assistant', content: data.content ?? '' }])
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Sorry, something went wrong. Please try again or contact smec@shishumandir.org.',
+        content: `Error: ${msg}\n\nIf this persists, contact smec@shishumandir.org.`,
       }])
     } finally {
       setLoading(false)
