@@ -119,33 +119,37 @@ export default async function handler(req: any, res: any) {
   const { messages } = req.body ?? {}
   if (!Array.isArray(messages)) return res.status(400).json({ error: 'messages must be an array' })
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'API key not configured' })
 
   try {
-    const upstream = await fetch('https://api.anthropic.com/v1/messages', {
+    const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: 'gpt-4o-mini',
         max_tokens: 1024,
-        system: SYSTEM_PROMPT,
-        messages,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          ...messages,
+        ],
       }),
     })
 
-    const data = await upstream.json() as { content?: Array<{ text: string }>; error?: { message: string } }
+    const data = await upstream.json() as {
+      choices?: Array<{ message: { content: string } }>
+      error?: { message: string }
+    }
 
     if (!upstream.ok) {
-      console.error('Anthropic error:', data.error)
+      console.error('OpenAI error:', data.error)
       return res.status(502).json({ error: data.error?.message || 'Upstream error' })
     }
 
-    return res.status(200).json({ content: data.content?.[0]?.text ?? '' })
+    return res.status(200).json({ content: data.choices?.[0]?.message?.content ?? '' })
   } catch (err) {
     console.error('Chat handler error:', err)
     return res.status(500).json({ error: 'Internal error' })

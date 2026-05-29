@@ -149,7 +149,7 @@ export default function ChatbotButton() {
                 Shishu Mandir Assistant
               </div>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.65)', marginTop: 1 }}>
-                Powered by Claude AI
+                Powered by ChatGPT
               </div>
             </div>
             {messages.length > 0 && (
