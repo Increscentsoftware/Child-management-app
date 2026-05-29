@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import toast from 'react-hot-toast'
+import ChatbotButton from '@/components/ChatbotButton'
 
 const NAV = [
   { path: '/',             icon: LayoutDashboard, label: 'Dashboard' },
@@ -106,8 +107,25 @@ export default function Layout() {
             <div style={{ background: '#fff', borderRadius: 12, padding: '6px 10px', display: 'inline-flex' }}>
               <img src="/logo.png" alt="Shishu Mandir" style={{ height: 54, width: 'auto', objectFit: 'contain' }} />
             </div>
-            <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.3, color: '#fff', textAlign: 'center' }}>Shishu Mandir</div>
+            <div style={{
+              fontSize: 14,
+              fontWeight: 800,
+              textAlign: 'center',
+              letterSpacing: '0.5px',
+              background: 'linear-gradient(90deg, #a8edca, #fff 40%, #f9e07a 70%, #a8edca)',
+              backgroundSize: '200% auto',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              animation: 'shimmer 3s linear infinite',
+            }}>Shishu Mandir</div>
           </div>
+          <style>{`
+            @keyframes shimmer {
+              0%   { background-position: 200% center; }
+              100% { background-position: -200% center; }
+            }
+          `}</style>
 
           <div style={{ height: 1, background: 'rgba(255,255,255,0.12)', margin: '0 16px' }} />
 
@@ -172,6 +190,8 @@ export default function Layout() {
             <Outlet />
           </main>
         </div>
+
+        <ChatbotButton />
       </div>
     )
   }
@@ -183,6 +203,7 @@ export default function Layout() {
       <main className="content-area" style={{ width: '100%' }}>
         <Outlet />
       </main>
+      <ChatbotButton />
 
       <nav style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,

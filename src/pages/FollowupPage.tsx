@@ -72,6 +72,10 @@ export default function FollowupPage() {
         setD({
           year_label: '',
           visit_date: new Date().toISOString().slice(0, 10),
+          gift_received: false,
+          gift_description: '',
+          gift_date: '',
+          gift_value: '',
           present_class:     data.present_class     ?? '',
           child_height:      data.height_cm         ?? '',
           child_weight:      data.weight_kg         ?? '',
@@ -131,6 +135,10 @@ export default function FollowupPage() {
         rent_per_month:    str('rent_per_month')    || null,
         num_dependents:    str('num_dependents')    || null,
         debts:             str('debts')             || null,
+        gift_received:     d.gift_received === true,
+        gift_description:  str('gift_description')  || null,
+        gift_date:         str('gift_date')          || null,
+        gift_value:        str('gift_value')         || null,
         special_remarks:   str('special_remarks')   || null,
         recorded_by:       user?.id                 ?? null,
         recorded_by_name:  str('recorded_by_name')  || null,
@@ -195,6 +203,17 @@ export default function FollowupPage() {
       }
       if (str('child_height')) childUpdates.height_cm = str('child_height')
       if (str('child_weight')) childUpdates.weight_kg = str('child_weight')
+      // Persist gift info into data_json so dashboard & filters can read it
+      if (d.gift_received === true) {
+        const existingJson = (child as any).data_json || {}
+        childUpdates.data_json = {
+          ...existingJson,
+          received_gifts: true,
+          gift_description: str('gift_description') || existingJson.gift_description,
+          gift_date:        str('gift_date')        || existingJson.gift_date,
+          gift_value:       str('gift_value')       || existingJson.gift_value,
+        }
+      }
       await supabase.from('children').update(childUpdates).eq('id', id)
 
       toast.success('Annual follow-up saved!')
@@ -311,6 +330,27 @@ export default function FollowupPage() {
         <F label="Debts">
           <input style={inp} value={str('debts')} onChange={e => set('debts', e.target.value)} />
         </F>
+
+        <Sec title="Gifts" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <input type="checkbox" id="gift_received" checked={d.gift_received === true} onChange={e => set('gift_received', e.target.checked)} style={{ width: 16, height: 16, accentColor: G }} />
+          <label htmlFor="gift_received" style={{ fontSize: 12, color: '#333', fontWeight: 500 }}>Gift received this year</label>
+        </div>
+        {d.gift_received === true && (
+          <div style={{ background: '#f0faf5', border: '1px solid #b2dfc9', borderRadius: 10, padding: '12px', marginBottom: 12 }}>
+            <F label="What was gifted?">
+              <input style={inp} value={str('gift_description')} onChange={e => set('gift_description', e.target.value)} placeholder="e.g. School bag, uniform, books" />
+            </F>
+            <div style={g2}>
+              <F label="Date of gift">
+                <input type="date" style={inp} value={str('gift_date')} onChange={e => set('gift_date', e.target.value)} />
+              </F>
+              <F label="Value (₹)">
+                <input style={inp} value={str('gift_value')} onChange={e => set('gift_value', e.target.value)} placeholder="e.g. 500" />
+              </F>
+            </div>
+          </div>
+        )}
 
         <Sec title="Documents" />
         <div style={{ marginBottom: 12 }}>

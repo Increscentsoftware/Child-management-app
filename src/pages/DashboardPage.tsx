@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/lib/store'
 import {
-  Users, BookOpen, Trophy, Gift, AlertTriangle, Wine, GraduationCap,
-  Menu, X, Search, TrendingUp, Heart, Home, Briefcase, LogOut,
-  Settings, FileText, PlusCircle, Upload, Shield
+  Users, BookOpen, Trophy, Gift, AlertTriangle, GraduationCap,
+  Menu, X, Heart, Home, Briefcase, LogOut,
+  Settings, PlusCircle, Upload, Shield
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -233,9 +233,7 @@ export default function AnalyticsDashboard() {
     families_in_debt: 0,
     special_needs_count: 0
   })
-  const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     if (!user) {
@@ -262,6 +260,7 @@ export default function AnalyticsDashboard() {
       let fatherAlive = 0, fatherDeceased = 0, fatherAbandoned = 0
       let motherAlive = 0, workingParents = 0, singleParent = 0, bothParents = 0
       let dvCases = 0, lifeSkills = 0, totalIncome = 0, inDebt = 0, specialNeeds = 0
+      let giftsReceived = 0, noGifts = 0
 
       const byClass: Record<string, number> = {}
       const byCategory: Record<string, number> = {}
@@ -308,6 +307,8 @@ export default function AnalyticsDashboard() {
         if (c.debts && String(c.debts).trim() !== '') inDebt++
 
         if (c.normal_or_special === 'Special') specialNeeds++
+        if (c.data_json?.received_gifts === true) giftsReceived++
+        else noGifts++
 
         if (c.present_class) byClass[c.present_class] = (byClass[c.present_class] || 0) + 1
         if (c.category) byCategory[c.category] = (byCategory[c.category] || 0) + 1
@@ -333,8 +334,8 @@ export default function AnalyticsDashboard() {
         college_students: collegeStudents,
         top_academic_performers: topAcademic,
         top_sports_performers: [],
-        children_received_gifts: 0,
-        children_no_gifts: 0,
+        children_received_gifts: giftsReceived,
+        children_no_gifts: noGifts,
         avg_height: heightCount > 0 ? totalHeight / heightCount : 0,
         avg_weight: weightCount > 0 ? totalWeight / weightCount : 0,
         underweight_count: underweight,
@@ -359,7 +360,7 @@ export default function AnalyticsDashboard() {
       console.error('Error loading analytics:', error)
       toast.error('Failed to load analytics')
     } finally {
-      setLoading(false)
+      // loading complete
     }
   }
 
@@ -388,34 +389,30 @@ export default function AnalyticsDashboard() {
         top: 0,
         zIndex: 10
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, marginBottom: 4 }}>
-              📊 Shishu Mandir Analytics Dashboard
-            </h1>
-            <p style={{ fontSize: 13, opacity: 0.9, margin: 0 }}>
-              Comprehensive insights on every child's journey
-            </p>
+        <div style={{ textAlign: 'center', position: 'relative' }}>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, marginBottom: 4 }}>
+            Shishu Mandir Analytics Dashboard
+          </h1>
+          <p style={{ fontSize: 13, opacity: 0.85, margin: 0 }}>
+            Comprehensive insights on every child's journey
+          </p>
+          <div className="mobile-only" style={{ position: 'absolute', top: 0, right: 0 }}>
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              style={{
+                background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff',
+                padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+                display: 'flex', alignItems: 'center'
+              }}
+            >
+              {menuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
           </div>
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            style={{
-              background: 'rgba(255,255,255,0.2)',
-              border: 'none',
-              color: '#fff',
-              padding: '10px 12px',
-              borderRadius: 8,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center'
-            }}
-          >
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
         </div>
       </div>
 
-      {/* Menu */}
+      {/* Menu — mobile only */}
+      <div className="mobile-only">
       {menuOpen && (
         <>
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50 }} onClick={() => setMenuOpen(false)} />
@@ -477,6 +474,7 @@ export default function AnalyticsDashboard() {
           </div>
         </>
       )}
+      </div>
 
       {/* Content */}
       <div style={{ padding: '24px 16px 100px' }}>
@@ -490,6 +488,8 @@ export default function AnalyticsDashboard() {
             <MetricCard title="College Bound" value={stats.college_students} icon={Trophy} color="#dc2626" bgColor="#fee2e2" onClick={() => navigate('/children?filter=college')} />
             <MetricCard title="External Students" value={stats.external_students} icon={Home} color="#ea580c" bgColor="#fed7aa" onClick={() => navigate('/children?filter=external')} />
             <MetricCard title="Special Needs" value={stats.special_needs_count} icon={Heart} color="#ec4899" bgColor="#ffe0f0" onClick={() => navigate('/children?filter=special_needs')} />
+            <MetricCard title="Received Gifts" value={stats.children_received_gifts} icon={Gift} color="#16a34a" bgColor="#dcfce7" onClick={() => navigate('/children?filter=gifts_received')} />
+            <MetricCard title="No Gifts Yet" value={stats.children_no_gifts} icon={Gift} color="#9ca3af" bgColor="#f3f4f6" onClick={() => navigate('/children?filter=no_gifts')} />
           </div>
         </div>
 

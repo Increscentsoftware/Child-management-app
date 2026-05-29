@@ -180,6 +180,10 @@ export interface AnnualFollowup {
   mother_life_skills?: boolean
   father_life_skills?: boolean
   photo_url?: string
+  gift_received?: boolean
+  gift_description?: string
+  gift_date?: string
+  gift_value?: string
   special_remarks?: string
   recorded_by?: string
   recorded_by_name?: string

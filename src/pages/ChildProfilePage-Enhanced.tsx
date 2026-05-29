@@ -605,113 +605,123 @@ export default function ChildProfilePage() {
         })()}
 
         {/* COMPARISON VIEW */}
-        {view === 'comparison' && latestFollowup && (
+        {view === 'comparison' && (
           <div>
-            <div style={{ 
-              fontSize: 11, 
-              color: '#888', 
-              marginBottom: 14, 
-              lineHeight: 1.6 
-            }}>
-              Compare admission data with the most recent follow-up to see how things have changed.
-            </div>
-
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: '1fr 1fr', 
-              gap: 10,
-              marginBottom: 14
-            }}>
-              <div style={{ textAlign: 'center', padding: 10, background: '#e1f5ee', borderRadius: 10 }}>
-                <div style={{ fontSize: 11, color: '#085041', fontWeight: 600 }}>On Admission</div>
-                <div style={{ fontSize: 10, color: '#666' }}>{child.admission_date}</div>
+            {!latestFollowup ? (
+              <div style={{ textAlign: 'center', padding: '40px 16px', color: '#999', fontSize: 13 }}>
+                No follow-up recorded yet.<br/>Add an annual follow-up to see the comparison.
               </div>
-              <div style={{ textAlign: 'center', padding: 10, background: '#e6f1fb', borderRadius: 10 }}>
-                <div style={{ fontSize: 11, color: '#185fa5', fontWeight: 600 }}>Latest Follow-up</div>
-                <div style={{ fontSize: 10, color: '#666' }}>{latestFollowup.year_label}</div>
-              </div>
-            </div>
-
-            {/* Comparison Cards */}
-            {[
-              {
-                title: 'Father Status',
-                before: child.father_status,
-                after: latestFollowup.father_status,
-                icon: '👨'
-              },
-              {
-                title: 'Father Occupation',
-                before: child.father_occupation,
-                after: latestFollowup.father_occupation,
-                icon: '💼'
-              },
-              {
-                title: 'Father Habits',
-                before: child.father_habits,
-                after: latestFollowup.father_habits,
-                icon: '🍺'
-              },
-              {
-                title: 'Mother Status',
-                before: child.mother_status,
-                after: latestFollowup.mother_status,
-                icon: '👩'
-              },
-              {
-                title: 'Present Class',
-                before: child.present_class,
-                after: latestFollowup.present_class,
-                icon: '📚'
-              },
-              {
-                title: 'Dependents',
-                before: child.num_dependents,
-                after: latestFollowup.num_dependents,
-                icon: '👥'
-              },
-              {
-                title: 'Monthly Rent',
-                before: child.rent_per_month,
-                after: latestFollowup.rent_per_month,
-                icon: '🏠'
-              }
-            ].filter(item => item.after && item.after !== item.before).map((item, i) => (
-              <div key={i} style={{ 
-                background: '#fff',
-                border: '1px solid #e5e5e5',
-                borderRadius: 10,
-                padding: 12,
-                marginBottom: 10
-              }}>
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>{item.icon}</span>
-                  {item.title}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 8, alignItems: 'center' }}>
-                  <div style={{ 
-                    padding: 8, 
-                    background: '#e1f5ee', 
-                    borderRadius: 8,
-                    fontSize: 11,
-                    textAlign: 'center'
-                  }}>
-                    {item.before || '—'}
+            ) : (() => {
+              const sections = [
+                { title: 'Child', icon: '👦', items: [
+                  { label: 'Class',       before: child.present_class,     after: latestFollowup.present_class },
+                  { label: 'Height (cm)', before: child.height_cm,         after: latestFollowup.child_height },
+                  { label: 'Weight (kg)', before: child.weight_kg,         after: latestFollowup.child_weight },
+                  { label: 'Health',      before: child.child_health,      after: latestFollowup.child_health },
+                ]},
+                { title: 'Father', icon: '👨', items: [
+                  { label: 'Status',      before: child.father_status,     after: latestFollowup.father_status },
+                  { label: 'Occupation',  before: child.father_occupation, after: latestFollowup.father_occupation },
+                  { label: 'Income (₹)', before: child.father_earnings,   after: latestFollowup.father_earnings },
+                  { label: 'Health',      before: child.father_health,     after: latestFollowup.father_health },
+                  { label: 'Habits',      before: child.father_habits,     after: latestFollowup.father_habits },
+                  { label: 'DV',          before: child.father_dv ? 'Yes' : 'No', after: latestFollowup.father_dv ? 'Yes' : 'No' },
+                ]},
+                { title: 'Mother', icon: '👩', items: [
+                  { label: 'Status',      before: child.mother_status,     after: latestFollowup.mother_status },
+                  { label: 'Occupation',  before: child.mother_occupation, after: latestFollowup.mother_occupation },
+                  { label: 'Income (₹)', before: child.mother_earnings,   after: latestFollowup.mother_earnings },
+                  { label: 'Health',      before: child.mother_health,     after: latestFollowup.mother_health },
+                ]},
+                { title: 'Financial & Housing', icon: '🏠', items: [
+                  { label: 'Rent/Month',  before: child.rent_per_month,    after: latestFollowup.rent_per_month },
+                  { label: 'Dependents',  before: child.num_dependents,    after: latestFollowup.num_dependents },
+                  { label: 'Debts',       before: child.debts,             after: latestFollowup.debts },
+                ]},
+              ]
+              const totalChanges = sections.flatMap(s => s.items).filter(({ before, after }) => {
+                const b = String(before ?? ''), a = String(after ?? '')
+                return a && a !== b
+              }).length
+              return (
+                <>
+                  {/* Summary banner */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                    <div style={{ flex: 1, background: '#1a6b4a', color: '#fff', borderRadius: 10, padding: '10px 12px' }}>
+                      <div style={{ fontSize: 9, opacity: 0.75, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>On Admission</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2 }}>{child.admission_date || '—'}</div>
+                    </div>
+                    <div style={{ background: '#fff', border: '1.5px solid #e5e5e5', borderRadius: 10, padding: '10px 12px', textAlign: 'center', minWidth: 64 }}>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: totalChanges > 0 ? '#d97706' : '#10b981', lineHeight: 1 }}>{totalChanges}</div>
+                      <div style={{ fontSize: 9, color: '#888', fontWeight: 600, textTransform: 'uppercase', marginTop: 2 }}>Changes</div>
+                    </div>
+                    <div style={{ flex: 1, background: '#1e40af', color: '#fff', borderRadius: 10, padding: '10px 12px', textAlign: 'right' }}>
+                      <div style={{ fontSize: 9, opacity: 0.75, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Latest Follow-up</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, marginTop: 2 }}>{latestFollowup.year_label}</div>
+                    </div>
                   </div>
-                  <span style={{ fontSize: 16 }}>→</span>
-                  <div style={{ 
-                    padding: 8, 
-                    background: '#e6f1fb', 
-                    borderRadius: 8,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    textAlign: 'center'
-                  }}>
-                    {item.after || '—'}
+
+                  {/* Column labels */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '76px 1fr 16px 1fr', gap: 6, padding: '0 2px', marginBottom: 6 }}>
+                    <div />
+                    <div style={{ fontSize: 9, fontWeight: 700, color: '#1a6b4a', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Then</div>
+                    <div />
+                    <div style={{ fontSize: 9, fontWeight: 700, color: '#1e40af', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Now</div>
                   </div>
-                </div>
-              </div>
-            ))}
+
+                  {sections.map(({ title, icon, items }) => {
+                    const changedCount = items.filter(({ before, after }) => {
+                      const b = String(before ?? ''), a = String(after ?? '')
+                      return a && a !== b
+                    }).length
+                    return (
+                      <div key={title} style={{ background: '#fff', borderRadius: 12, border: '1px solid #ebebeb', marginBottom: 10, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#f8f9fa', borderBottom: '1px solid #ebebeb' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 14 }}>{icon}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#111' }}>{title}</span>
+                          </div>
+                          {changedCount > 0 && (
+                            <span style={{ background: '#fef3c7', color: '#92400e', fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10, border: '1px solid #fcd34d' }}>
+                              {changedCount} changed
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ padding: '6px 8px' }}>
+                          {items.map(({ label, before, after }) => {
+                            const b = String(before ?? '') || '—'
+                            const a = String(after  ?? '') || '—'
+                            const changed = a !== '—' && a !== b
+                            return (
+                              <div key={label} style={{
+                                display: 'grid', gridTemplateColumns: '76px 1fr 16px 1fr', gap: 6,
+                                alignItems: 'center', padding: '5px 4px', borderRadius: 7, marginBottom: 3,
+                                background: changed ? '#fffbeb' : 'transparent',
+                              }}>
+                                <div style={{ fontSize: 10, color: '#888', fontWeight: 500, lineHeight: 1.3 }}>{label}</div>
+                                <div style={{ fontSize: 11, textAlign: 'center', padding: '4px 6px', background: '#f0faf5', borderRadius: 6, color: '#085041', border: '1px solid #c6e8d5' }}>
+                                  {b}
+                                </div>
+                                <div style={{ textAlign: 'center', fontSize: 14, color: changed ? '#d97706' : '#e0e0e0', fontWeight: 700 }}>›</div>
+                                <div style={{
+                                  fontSize: 11, textAlign: 'center', padding: '4px 6px', borderRadius: 6,
+                                  background: changed ? '#dbeafe' : '#f5f5f5',
+                                  color: changed ? '#1e40af' : '#bbb',
+                                  fontWeight: changed ? 700 : 400,
+                                  border: changed ? '1px solid #bfdbfe' : '1px solid transparent',
+                                }}>
+                                  {a}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </>
+              )
+            })()}
           </div>
         )}
 

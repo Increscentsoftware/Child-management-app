@@ -13,7 +13,7 @@ import AddChildPage from '@/pages/AddChildPage'
 import FollowupPage from '@/pages/FollowupPage'
 import ChangeLogPage from '@/pages/ChangeLogPage'
 import ImportPage from '@/pages/ImportPage'
-import SeedDataPage from '@/pages/SeedDataPage'
+
 
 // Admin Pages
 import UserManagementPage from '@/pages/admin/UserManagementPage'
@@ -94,13 +94,6 @@ function App() {
           <Route
             path="import"
             element={<ImportPage />}
-          />
-
-          {/* SEED DATA (dev/testing) */}
-
-          <Route
-            path="seed"
-            element={<SeedDataPage />}
           />
 
           {/* ADMIN */}
