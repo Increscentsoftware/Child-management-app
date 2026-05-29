@@ -10,7 +10,6 @@ import toast from 'react-hot-toast'
 
 interface User {
   id: string
-  email: string
   full_name: string
   role: 'admin' | 'field_worker'
   phone?: string
@@ -37,6 +36,8 @@ export default function UserManagementPage() {
   const [showModal, setShowModal] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [showPassword, setShowPassword] = useState(false)
+  const [modalError, setModalError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
   
   const [formData, setFormData] = useState<UserFormData>({
     email: '',
@@ -76,6 +77,7 @@ export default function UserManagementPage() {
 
   const handleOpenCreate = () => {
     setEditingUser(null)
+    setModalError(null)
     setFormData({
       email: '',
       password: '',
@@ -91,8 +93,9 @@ export default function UserManagementPage() {
 
   const handleOpenEdit = (user: User) => {
     setEditingUser(user)
+    setModalError(null)
     setFormData({
-      email: user.email,
+      email: '',
       password: '',
       full_name: user.full_name,
       employee_id: user.id,
@@ -106,25 +109,24 @@ export default function UserManagementPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setModalError(null)
 
     if (!formData.email || !formData.full_name) {
-      toast.error('Email and Full Name are required')
+      setModalError('Email and Full Name are required')
       return
     }
-
     if (!editingUser && !formData.password) {
-      toast.error('Password is required for new users')
+      setModalError('Password is required for new users')
       return
     }
-
     if (!editingUser && formData.password.length < 6) {
-      toast.error('Password must be at least 6 characters')
+      setModalError('Password must be at least 6 characters')
       return
     }
 
+    setSubmitting(true)
     try {
       if (editingUser) {
-        // Update existing user
         const { error } = await supabase
           .from('social_workers')
           .update({
@@ -137,46 +139,58 @@ export default function UserManagementPage() {
 
         if (error) throw error
         toast.success('User updated successfully')
+        setShowModal(false)
+        loadUsers()
       } else {
-        // Create new user in Supabase Auth
+        // Save admin session before signUp replaces it
+        const { data: { session: adminSession } } = await supabase.auth.getSession()
+
+        // Step 1: Create auth user
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: formData.email,
           password: formData.password,
-          options: {
-            data: {
-              full_name: formData.full_name,
-              role: formData.role
-            }
-          }
+          options: { data: { full_name: formData.full_name, role: formData.role } }
         })
 
-        if (authError) throw authError
+        // Restore admin session immediately (signUp hijacks the session)
+        if (adminSession) {
+          await supabase.auth.setSession({
+            access_token: adminSession.access_token,
+            refresh_token: adminSession.refresh_token,
+          })
+        }
 
-        if (authData.user) {
-          // Insert into social_workers table
-          const { error: dbError } = await supabase
-            .from('social_workers')
-            .insert({
-              id: authData.user.id,
-              email: formData.email,
-              full_name: formData.full_name,
-              phone: formData.phone,
-              area_assigned: formData.area_assigned,
-              role: formData.role,
-              is_active: true
-            })
+        if (authError) throw new Error(`Auth error: ${authError.message}`)
+        if (!authData.user) throw new Error('User creation failed — no user returned from auth')
 
-          if (dbError) throw dbError
+        // Step 2: Insert social_workers profile
+        const { error: dbError } = await supabase
+          .from('social_workers')
+          .upsert({
+            id: authData.user.id,
+            full_name: formData.full_name,
+            phone: formData.phone || null,
+            area_assigned: formData.area_assigned || null,
+            role: formData.role,
+            is_active: true
+          }, { onConflict: 'id' })
+
+        if (dbError) {
+          throw new Error(
+            `Account created in Auth but profile save failed: ${dbError.message}. ` +
+            `Ask your Supabase admin to add an INSERT policy on social_workers for admins.`
+          )
         }
 
         toast.success('User created successfully')
+        setShowModal(false)
+        loadUsers()
       }
-
-      setShowModal(false)
-      loadUsers()
     } catch (error: any) {
-      console.error('Error:', error)
-      toast.error(error.message || 'Failed to save user')
+      console.error('User save error:', error)
+      setModalError(error.message || 'Failed to save user')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -323,7 +337,7 @@ export default function UserManagementPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {users.map(user => (
+            {users.filter(u => u.id !== currentUser?.id).map(user => (
               <div
                 key={user.id}
                 style={{
@@ -360,7 +374,7 @@ export default function UserManagementPage() {
                     <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 2 }}>
                       {user.full_name}
                     </div>
-                    <div style={{ fontSize: 13, color: '#888' }}>{user.email}</div>
+                    <div style={{ fontSize: 13, color: '#888' }}>{user.phone || user.area_assigned || 'No contact info'}</div>
                   </div>
 
                   {/* Role Badge */}
@@ -376,7 +390,7 @@ export default function UserManagementPage() {
                     gap: 4
                   }}>
                     {user.role === 'admin' ? <Shield size={14} /> : <UserCheck size={14} />}
-                    {user.role === 'admin' ? 'Admin' : 'Field Worker'}
+                    {user.role === 'admin' ? 'Admin' : 'Social Worker'}
                   </div>
                 </div>
 
@@ -760,10 +774,20 @@ export default function UserManagementPage() {
                     cursor: 'pointer'
                   }}
                 >
-                  <option value="field_worker">Field Worker</option>
+                  <option value="field_worker">Social Worker</option>
                   <option value="admin">Administrator</option>
                 </select>
               </div>
+
+              {/* Inline error */}
+              {modalError && (
+                <div style={{
+                  background: '#fcebeb', border: '1px solid #f5c0c0', borderRadius: 8,
+                  padding: '10px 13px', fontSize: 13, color: '#a32d2d', marginBottom: 16
+                }}>
+                  ⚠ {modalError}
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div style={{ display: 'flex', gap: 12 }}>
@@ -789,22 +813,21 @@ export default function UserManagementPage() {
                 </button>
                 <button
                   type="submit"
+                  disabled={submitting}
                   style={{
                     flex: 1,
                     padding: '12px 20px',
                     border: 'none',
-                    background: '#1a6b4a',
+                    background: submitting ? '#5dcaa5' : '#1a6b4a',
                     color: '#fff',
                     borderRadius: 8,
                     fontSize: 14,
                     fontWeight: 600,
-                    cursor: 'pointer',
+                    cursor: submitting ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s'
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#15563c'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#1a6b4a'}
                 >
-                  {editingUser ? 'Update User' : 'Create User'}
+                  {submitting ? 'Saving…' : editingUser ? 'Update User' : 'Create User'}
                 </button>
               </div>
             </form>

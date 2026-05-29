@@ -202,6 +202,18 @@ export interface ChangeLogEntry {
   changed_at: string
 }
 
+export interface ChildDocument {
+  id: string
+  child_id: string
+  file_name: string
+  file_url: string
+  file_type: string
+  file_size?: number
+  uploaded_by?: string
+  uploaded_by_name?: string
+  uploaded_at: string
+}
+
 export interface SyncQueueItem {
   id: string
   operation: 'INSERT' | 'UPDATE' | 'DELETE'

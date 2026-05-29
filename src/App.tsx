@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
+import { startSyncWatcher, pullFromSupabase } from '@/lib/sync'
 
 import Layout from '@/components/Layout'
 
@@ -7,11 +8,12 @@ import Layout from '@/components/Layout'
 import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import ChildrenListPage from '@/pages/ChildrenListPage'
-import ChildProfilePage from '@/pages/ChildProfilePage'
+import ChildProfilePage from '@/pages/ChildProfilePage-Enhanced'
 import AddChildPage from '@/pages/AddChildPage'
 import FollowupPage from '@/pages/FollowupPage'
 import ChangeLogPage from '@/pages/ChangeLogPage'
 import ImportPage from '@/pages/ImportPage'
+import SeedDataPage from '@/pages/SeedDataPage'
 
 // Admin Pages
 import UserManagementPage from '@/pages/admin/UserManagementPage'
@@ -22,6 +24,12 @@ const FormFieldManager = lazy(
 )
 
 function App() {
+  useEffect(() => {
+    const stopSync = startSyncWatcher()
+    if (navigator.onLine) pullFromSupabase()
+    return () => stopSync()
+  }, [])
+
   return (
     <BrowserRouter>
       <Routes>
@@ -86,6 +94,13 @@ function App() {
           <Route
             path="import"
             element={<ImportPage />}
+          />
+
+          {/* SEED DATA (dev/testing) */}
+
+          <Route
+            path="seed"
+            element={<SeedDataPage />}
           />
 
           {/* ADMIN */}

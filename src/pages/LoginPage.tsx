@@ -7,20 +7,30 @@ import { useAppStore } from '@/lib/store'
 
 interface LoginForm { email: string; password: string }
 
+function friendlyAuthError(msg: string): string {
+  const m = msg.toLowerCase()
+  if (m.includes('invalid login') || m.includes('invalid credentials') || m.includes('wrong password') || m.includes('email not confirmed'))
+    return 'Incorrect email or password. Please try again.'
+  if (m.includes('too many requests') || m.includes('rate limit'))
+    return 'Too many login attempts. Please wait a few minutes and try again.'
+  if (m.includes('network') || m.includes('fetch'))
+    return 'Network error. Please check your connection.'
+  return msg
+}
+
 export default function LoginPage() {
   const navigate = useNavigate()
   const { setUser } = useAppStore()
   const [loading, setLoading] = useState(false)
+  const [loginError, setLoginError] = useState<string | null>(null)
   const { register, handleSubmit, formState: { errors } } = useForm<LoginForm>()
 
   const onSubmit = async ({ email, password }: LoginForm) => {
     setLoading(true)
+    setLoginError(null)
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-  console.error('SUPABASE LOGIN ERROR:', error)
-  throw error
-}
+      if (error) throw error
 
       if (data.user) {
         const { data: sw, error: swErr } = await supabase
@@ -35,7 +45,8 @@ export default function LoginPage() {
         navigate('/')
       }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Login failed')
+      const msg = err instanceof Error ? err.message : 'Login failed'
+      setLoginError(friendlyAuthError(msg))
     } finally {
       setLoading(false)
     }
@@ -71,6 +82,7 @@ export default function LoginPage() {
           <input
             type="email"
             {...register('email', { required: 'Email is required' })}
+            onChange={() => setLoginError(null)}
             placeholder="sw@shishumandir.org"
             style={{
               width: '100%', padding: '10px 12px', border: '1px solid #ddd',
@@ -88,6 +100,7 @@ export default function LoginPage() {
           <input
             type="password"
             {...register('password', { required: 'Password is required' })}
+            onChange={() => setLoginError(null)}
             placeholder="••••••••"
             style={{
               width: '100%', padding: '10px 12px', border: '1px solid #ddd',
@@ -97,6 +110,17 @@ export default function LoginPage() {
           />
           {errors.password && <p style={{ fontSize: 11, color: '#a32d2d', marginTop: 3 }}>{errors.password.message}</p>}
         </div>
+
+        {loginError && (
+          <div style={{
+            background: '#fcebeb', border: '1px solid #f5c0c0', borderRadius: 8,
+            padding: '10px 13px', fontSize: 13, color: '#a32d2d',
+            display: 'flex', alignItems: 'flex-start', gap: 8
+          }}>
+            <span style={{ flexShrink: 0, fontSize: 15 }}>⚠</span>
+            <span>{loginError}</span>
+          </div>
+        )}
 
         <button
           type="submit"

@@ -65,22 +65,24 @@ interface AnalyticsStats {
 }
 
 // Stat Card Component
-function MetricCard({ 
-  title, 
-  value, 
+function MetricCard({
+  title,
+  value,
   subtitle,
-  icon: Icon, 
-  color, 
-  bgColor 
+  icon: Icon,
+  color,
+  bgColor,
+  onClick
 }: any) {
   return (
-    <div style={{
+    <div onClick={onClick} style={{
       background: '#fff',
       borderRadius: '14px',
       padding: '18px',
       boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
       border: '1px solid #f0f0f0',
-      transition: 'all 0.3s ease'
+      transition: 'all 0.3s ease',
+      cursor: onClick ? 'pointer' : 'default'
     }}
     onMouseEnter={(e) => {
       e.currentTarget.style.boxShadow = '0 8px 16px rgba(0,0,0,0.12)'
@@ -117,10 +119,10 @@ function MetricCard({
 }
 
 // Progress Bar Component
-function ProgressMetric({ label, value, total, color }: any) {
+function ProgressMetric({ label, value, total, color, onClick }: any) {
   const percentage = (value / total) * 100
   return (
-    <div style={{ marginBottom: 14 }}>
+    <div onClick={onClick} style={{ marginBottom: 14, cursor: onClick ? 'pointer' : 'default' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
         <span style={{ fontSize: 12, color: '#666', fontWeight: 500 }}>{label}</span>
         <span style={{ fontSize: 12, fontWeight: 600, color: '#111' }}>{value} ({Math.round(percentage)}%)</span>
@@ -482,12 +484,12 @@ export default function AnalyticsDashboard() {
         <div style={{ marginBottom: 28 }}>
           <h2 style={{ fontSize: 16, fontWeight: 600, color: '#111', marginBottom: 14, marginTop: 0 }}>📈 Overview</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
-            <MetricCard title="Total Children" value={stats.total_children} icon={Users} color="#1a6b4a" bgColor="#e1f5ee" />
-            <MetricCard title="Active Students" value={stats.active_children} icon={GraduationCap} color="#0891b2" bgColor="#e0f2fe" />
-            <MetricCard title="Past Students" value={stats.past_students} icon={BookOpen} color="#7c3aed" bgColor="#f3e8ff" />
-            <MetricCard title="College Bound" value={stats.college_students} icon={Trophy} color="#dc2626" bgColor="#fee2e2" />
-            <MetricCard title="External Students" value={stats.external_students} icon={Home} color="#ea580c" bgColor="#fed7aa" />
-            <MetricCard title="Special Needs" value={stats.special_needs_count} icon={Heart} color="#ec4899" bgColor="#ffe0f0" />
+            <MetricCard title="Total Children" value={stats.total_children} icon={Users} color="#1a6b4a" bgColor="#e1f5ee" onClick={() => navigate('/children')} />
+            <MetricCard title="Active Students" value={stats.active_children} icon={GraduationCap} color="#0891b2" bgColor="#e0f2fe" onClick={() => navigate('/children?filter=active')} />
+            <MetricCard title="Past Students" value={stats.past_students} icon={BookOpen} color="#7c3aed" bgColor="#f3e8ff" onClick={() => navigate('/children?filter=past')} />
+            <MetricCard title="College Bound" value={stats.college_students} icon={Trophy} color="#dc2626" bgColor="#fee2e2" onClick={() => navigate('/children?filter=college')} />
+            <MetricCard title="External Students" value={stats.external_students} icon={Home} color="#ea580c" bgColor="#fed7aa" onClick={() => navigate('/children?filter=external')} />
+            <MetricCard title="Special Needs" value={stats.special_needs_count} icon={Heart} color="#ec4899" bgColor="#ffe0f0" onClick={() => navigate('/children?filter=special_needs')} />
           </div>
         </div>
 
@@ -520,8 +522,8 @@ export default function AnalyticsDashboard() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
             <MetricCard title="Avg Height" value={`${stats.avg_height.toFixed(1)} cm`} icon={Users} color="#3b82f6" bgColor="#eff6ff" />
             <MetricCard title="Avg Weight" value={`${stats.avg_weight.toFixed(1)} kg`} icon={Heart} color="#ef4444" bgColor="#fee2e2" />
-            <MetricCard title="Underweight" value={stats.underweight_count} subtitle={`${((stats.underweight_count / stats.total_children) * 100).toFixed(1)}% of total`} icon={AlertTriangle} color="#ea580c" bgColor="#fed7aa" />
-            <MetricCard title="Malnourished" value={stats.malnourished_count} subtitle={`Need attention`} icon={Heart} color="#dc2626" bgColor="#fee2e2" />
+            <MetricCard title="Underweight" value={stats.underweight_count} subtitle={`${((stats.underweight_count / stats.total_children) * 100).toFixed(1)}% of total`} icon={AlertTriangle} color="#ea580c" bgColor="#fed7aa" onClick={() => navigate('/children?filter=underweight')} />
+            <MetricCard title="Malnourished" value={stats.malnourished_count} subtitle={`Need attention`} icon={Heart} color="#dc2626" bgColor="#fee2e2" onClick={() => navigate('/children?filter=malnourished')} />
 
           </div>
         </div>
@@ -532,17 +534,17 @@ export default function AnalyticsDashboard() {
           <div style={{ background: '#fff', borderRadius: '14px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
               <div>
-                <ProgressMetric label="Both Parents Alive" value={stats.both_parents_alive} total={stats.total_children} color="#10b981" />
-                <ProgressMetric label="Single Parent" value={stats.single_parent} total={stats.total_children} color="#f59e0b" />
+                <ProgressMetric label="Both Parents Alive" value={stats.both_parents_alive} total={stats.total_children} color="#10b981" onClick={() => navigate('/children?filter=both_parents')} />
+                <ProgressMetric label="Single Parent" value={stats.single_parent} total={stats.total_children} color="#f59e0b" onClick={() => navigate('/children?filter=single_parent')} />
               </div>
               <div>
-                <ProgressMetric label="Father Alive" value={stats.father_alive} total={stats.total_children} color="#3b82f6" />
-                <ProgressMetric label="Father Deceased" value={stats.father_deceased} total={stats.total_children} color="#ef4444" />
-                <ProgressMetric label="Father Abandoned" value={stats.father_abandoned} total={stats.total_children} color="#8b5cf6" />
+                <ProgressMetric label="Father Alive" value={stats.father_alive} total={stats.total_children} color="#3b82f6" onClick={() => navigate('/children?filter=father_alive')} />
+                <ProgressMetric label="Father Deceased" value={stats.father_deceased} total={stats.total_children} color="#ef4444" onClick={() => navigate('/children?filter=deceased')} />
+                <ProgressMetric label="Father Abandoned" value={stats.father_abandoned} total={stats.total_children} color="#8b5cf6" onClick={() => navigate('/children?filter=abandoned')} />
               </div>
               <div>
-                <ProgressMetric label="Mother Alive" value={stats.mother_alive} total={stats.total_children} color="#ec4899" />
-                <ProgressMetric label="Working Parents" value={stats.working_parents} total={stats.total_children} color="#1a6b4a" />
+                <ProgressMetric label="Mother Alive" value={stats.mother_alive} total={stats.total_children} color="#ec4899" onClick={() => navigate('/children?filter=mother_alive')} />
+                <ProgressMetric label="Working Parents" value={stats.working_parents} total={stats.total_children} color="#1a6b4a" onClick={() => navigate('/children?filter=working_parents')} />
               </div>
             </div>
           </div>
@@ -561,7 +563,7 @@ export default function AnalyticsDashboard() {
 
             <div style={{ background: '#fff', borderRadius: '14px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #f0f0f0' }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 14, margin: 0, color: '#111' }}>Risk Indicators</h3>
-              <ProgressMetric label="DV Cases" value={stats.dv_cases} total={stats.total_children} color="#dc2626" />
+              <ProgressMetric label="DV Cases" value={stats.dv_cases} total={stats.total_children} color="#dc2626" onClick={() => navigate('/children?filter=dv')} />
               <ProgressMetric label="Families in Debt" value={stats.families_in_debt} total={stats.total_children} color="#ea580c" />
               <ProgressMetric label="Life Skills Trained" value={stats.life_skills_trained} total={stats.total_children} color="#10b981" />
             </div>

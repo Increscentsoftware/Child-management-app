@@ -1,459 +1,162 @@
-// src/types/index.ts — COMPLETE REPLACEMENT
-// Drop-in replacement for existing types/index.ts
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
 
-// ── Enums ─────────────────────────────────────────────────────
-export type Role = 'field_worker' | 'supervisor' | 'admin'
-export type FatherStatus = 'Alive' | 'Dead' | 'Abandoned' | 'Unknown'
-export type MotherStatus = 'Alive' | 'Dead' | 'Abandoned' | 'Unknown'
-export type Sex = 'Male' | 'Female' | 'Other'
-export type Category = 'Category I' | 'Category II' | 'Category III' | 'Category IV'
-export type ChildType = 'shishu_student' | 'sponsored_external' | 'alumni'
-export type LifecycleStatus = 'enrolled' | 'active' | 'dropout' | 'alumni' | 'lost_contact'
-export type DocType = 'photo' | 'progress_card' | 'certificate' | 'aadhar' | 'birth_certificate' | 'sponsor_letter' | 'other'
-export type GiftType = 'Birthday' | 'Diwali' | 'Christmas' | 'Educational' | 'Uniform' | 'Shoes' | 'Books' | 'Medical' | 'Other'
-export type AlumniStatus = 'Working' | 'In College' | 'Higher Studies' | 'Married' | 'Unemployed' | 'Unknown'
-
-// ── Social Worker ─────────────────────────────────────────────
-export interface SocialWorker {
-  id: string
-  full_name: string
-  employee_id?: string
-  role: Role
-  phone?: string
-  area_assigned?: string
-  is_active: boolean
-  created_at: string
-  updated_at: string
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-// ── Child (core record) ───────────────────────────────────────
-export interface Child {
-  id: string
-  school_id: string
-  child_type: ChildType
-  lifecycle_status: LifecycleStatus
-  admission_date?: string
-  full_name: string
-  date_of_birth?: string
-  sex?: Sex
-  religion?: string
-  mother_tongue?: string
-  present_class?: string
-  category?: Category
-  aadhar_no?: string
-  normal_or_special?: string
-  photo_url?: string
-
-  // Lifecycle dates
-  dropout_date?: string
-  dropout_reason?: string
-  alumni_since?: string
-
-  // Sponsored external only
-  sponsored_school_name?: string
-  sponsored_school_address?: string
-  sponsorship_start_date?: string
-
-  // Father
-  father_name?: string
-  father_age?: string
-  father_aadhar?: string
-  father_mobile?: string
-  father_status: FatherStatus
-  father_occupation?: string
-  father_nature_of_work?: string
-  father_earnings?: string
-  father_education?: string
-  father_habits?: string
-  father_health?: string
-  father_dv: boolean
-  father_extramarital?: boolean
-  father_origin?: string
-
-  // Mother
-  mother_name?: string
-  mother_age?: string
-  mother_aadhar?: string
-  mother_mobile?: string
-  mother_status: MotherStatus
-  mother_occupation?: string
-  mother_nature_of_work?: string
-  mother_earnings?: string
-  mother_education?: string
-  mother_habits?: string
-  mother_health?: string
-  mother_dv?: boolean
-  mother_extramarital?: boolean
-  mother_origin?: string
-  family_planning_op?: boolean
-
-  // Family background
-  year_of_marriage?: string
-  marriage_type?: string   // 'Arranged' | 'Love'
-
-  // Financial
-  avg_monthly_income?: string
-  other_income?: string
-  govt_support?: string
-  num_dependents?: string
-  savings?: string
-  debts?: string
-
-  // Living conditions
-  area_type?: string           // 'Slum' | 'Village' | 'Urban'
-  sanitation?: string
-  water_source?: string
-  house_size?: string
-  house_rooms?: string
-  house_roof?: string
-  house_floor?: string
-  house_condition?: string
-  kitchen_type?: string
-  bathing_place?: string
-  furniture?: string
-  house_ownership?: string
-  rent_per_month?: string
-  advance_paid?: string
-  vehicles?: string
-
-  // Child profile
-  height_cm?: string
-  weight_kg?: string
-  child_health?: string
-  relationship_father?: string
-  relationship_mother?: string
-  relationship_siblings?: string
-  interests?: string
-  preschool?: string
-  prev_school_reason?: string
-  meals_per_day?: string
-  food_type?: string
-  medical_help_from?: string
-  conclusion?: string           // Social worker narrative
-
-  // Address & contact
-  address_line1?: string
-  address_line2?: string
-  address_city?: string
-  address_pincode?: string
-  contact_phone?: string
-  reported_by?: string
-  verified_by?: string
-
-  // Legacy/meta
-  source_file?: string
-  imported_at?: string
-  data_json?: Record<string, unknown>
-  created_by?: string
-  created_at: string
-  updated_at: string
-  last_followup_date?: string
-  is_active: boolean
-
-  // Joined relations
-  followups?: AnnualFollowup[]
-  siblings?: Sibling[]
-  academic_records?: AcademicRecord[]
-  sponsors?: Sponsor[]
-  gifts?: Gift[]
-  documents?: Document[]
-  alumni_tracking?: AlumniTracking
-  change_log?: ChangeLogEntry[]
+body {
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #fafafa;
+  color: #111;
 }
 
-// ── Sibling ───────────────────────────────────────────────────
-export interface Sibling {
-  id: string
-  child_id: string
-  name?: string
-  age?: string
-  sex?: string
-  education?: string
-  medium_of_instruction?: string
-  occupation?: string
-  health?: string
-  is_also_sm_student: boolean
-  sm_child_id?: string
-  created_at: string
+#root {
+  min-height: 100vh;
 }
 
-// ── Annual Followup (yearly social visit — only changing fields)
-export interface AnnualFollowup {
-  id: string
-  child_id: string
-  year_label: string           // '2024-25'
-  visit_date?: string
-  present_class?: string
-  child_height?: string
-  child_weight?: string
-  child_health?: string
-  // Father changes
-  father_status?: FatherStatus
-  father_occupation?: string
-  father_earnings?: string
-  father_habits?: string
-  father_health?: string
-  father_dv?: boolean
-  // Mother changes
-  mother_status?: MotherStatus
-  mother_occupation?: string
-  mother_earnings?: string
-  mother_health?: string
-  // Financial changes
-  rent_per_month?: string
-  num_dependents?: string
-  debts?: string
-  avg_monthly_income?: string
-  // Life skills
-  mother_life_skills?: boolean
-  father_life_skills?: boolean
-  // Remarks
-  special_remarks?: string
-  recorded_by?: string
-  recorded_by_name?: string
-  verified_by?: string
-  photo_url?: string
-  created_at: string
-  updated_at: string
+.app-layout {
+  width: 100%;
+  max-width: 1200px;
+  min-height: 100vh;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  font-family: 'DM Sans', system-ui, sans-serif;
 }
 
-// ── Subject Score (inside academic_records.subject_scores JSONB)
-export interface SubjectScore {
-  subject: string
-  homework?: number | null
-  internal?: number | null
-  exam?: number | null
-  total?: number | null
-  grade?: string | null
-  is_na?: boolean
+.app-layout > div:first-of-type {
+  width: 100%;
 }
 
-// ── Activity Grade (inside academic_records.activity_grades JSONB)
-export interface ActivityGrade {
-  activity: string
-  grade?: string | null
-  is_na?: boolean
+.top-bar {
+  padding: 12px 16px;
+  background: #f4f7f8;
+  border-bottom: 1px solid #e7eaed;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
 }
 
-// ── Personality Score (inside academic_records.personality_scores JSONB)
-export interface PersonalityScore {
-  criteria: string
-  marks?: number | null
-  max_marks: number
+.home-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  background: #1a6b4a;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 12px 18px;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(26, 107, 74, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-// ── Academic Record (one per term per year) ───────────────────
-export interface AcademicRecord {
-  id: string
-  child_id: string
-  academic_year: string          // '2025-26'
-  term: 1 | 2
-  class_name?: string
-  report_date?: string
-  attendance_present?: number
-  attendance_total?: number
-  is_promoted?: boolean
-  teacher_remarks?: string
-  grand_total_personality?: number
-  subject_scores: SubjectScore[]
-  activity_grades: ActivityGrade[]
-  personality_scores: PersonalityScore[]
-  recorded_by?: string
-  recorded_by_name?: string
-  created_at: string
-  updated_at: string
+.home-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 34px rgba(26, 107, 74, 0.2);
 }
 
-// ── Sponsor ───────────────────────────────────────────────────
-export interface Sponsor {
-  id: string
-  child_id: string
-  sponsor_name: string
-  organization?: string
-  phone?: string
-  email?: string
-  amount_per_month?: number
-  start_date?: string
-  end_date?: string
-  is_active: boolean
-  notes?: string
-  created_by?: string
-  created_at: string
-  updated_at: string
+.content-area {
+  flex: 1;
+  overflow: auto;
 }
 
-// ── Gift ──────────────────────────────────────────────────────
-export interface Gift {
-  id: string
-  child_id: string
-  gift_type: GiftType
-  occasion?: string
-  description?: string
-  value_amount?: number
-  given_date: string
-  given_by?: string
-  notes?: string
-  photo_url?: string
-  created_by?: string
-  created_at: string
+.bottom-nav {
+  display: flex;
+  border-top: 0.5px solid #e5e5e5;
+  background: #fff;
+  position: sticky;
+  bottom: 0;
+  z-index: 50;
 }
 
-// ── Document ──────────────────────────────────────────────────
-export interface Document {
-  id: string
-  child_id: string
-  academic_record_id?: string
-  doc_type: DocType
-  file_name: string
-  storage_path: string
-  public_url: string
-  file_size_kb?: number
-  academic_year?: string
-  term?: number
-  notes?: string
-  uploaded_by?: string
-  uploaded_at: string
+.nav-button {
+  flex: 1;
+  padding: 8px 4px 6px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 10px;
+  font-family: inherit;
+  color: #888;
+  font-weight: 400;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
 }
 
-// ── Alumni Tracking ───────────────────────────────────────────
-export interface AlumniTracking {
-  id: string
-  child_id: string
-  current_status?: AlumniStatus
-  employer_name?: string
-  job_role?: string
-  current_city?: string
-  current_phone?: string
-  current_email?: string
-  college_name?: string
-  course_name?: string
-  spouse_name?: string
-  own_children: { name: string; age: string; school?: string }[]
-  last_contact_date?: string
-  next_followup_date?: string
-  notes?: string
-  tracked_by?: string
-  created_at: string
-  updated_at: string
+.nav-button.nav-active {
+  color: #1a6b4a;
+  font-weight: 700;
 }
 
-// ── Admin Config ──────────────────────────────────────────────
-export interface SubjectConfig {
-  id: string
-  class_name: string
-  subject_name: string
-  max_homework: number
-  max_internal: number
-  max_exam: number
-  max_total: number
-  display_order: number
-  is_active: boolean
-  created_at: string
-}
+@media (min-width: 768px) {
+  .app-layout {
+    padding: 0 24px 24px;
+  }
 
-export interface ActivityConfig {
-  id: string
-  activity_name: string
-  display_order: number
-  is_active: boolean
-  created_at: string
-}
+  .top-bar {
+    justify-content: space-between;
+    padding: 18px 24px;
+    background: #1a6b4a;
+    border-bottom: none;
+  }
 
-export interface PersonalityConfig {
-  id: string
-  criteria_name: string
-  max_marks: number
-  display_order: number
-  is_active: boolean
-  created_at: string
-}
+  .home-button {
+    background: #fff;
+    color: #1a6b4a;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  }
 
-// ── Change Log ────────────────────────────────────────────────
-export interface ChangeLogEntry {
-  id: string
-  child_id: string
-  child_name: string
-  field_name: string
-  old_value?: string
-  new_value?: string
-  changed_by?: string
-  changed_by_name?: string
-  followup_id?: string
-  followup_year?: string
-  changed_at: string
-}
+  .home-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 24px 46px rgba(0, 0, 0, 0.12);
+  }
 
-// ── Sync Queue ────────────────────────────────────────────────
-export interface SyncQueueItem {
-  id: string
-  operation: 'INSERT' | 'UPDATE' | 'DELETE'
-  table_name: string
-  record_id: string
-  payload: Record<string, unknown>
-  created_at: string
-  synced_at?: string
-  error?: string
-  retry_count: number
-}
+  .bottom-nav {
+    position: static;
+    border-top: none;
+    justify-content: center;
+    gap: 14px;
+    padding: 16px 0;
+    background: transparent;
+  }
 
-// ── Dashboard Stats ───────────────────────────────────────────
-export interface DashboardStats {
-  total: number
-  shishu_students: number
-  sponsored_external: number
-  alumni: number
-  active: number
-  dropout: number
-  dv_cases: number
-  followup_due: number
-  pending_sync: number
-  by_category: Record<string, number>
-  by_class: Record<string, number>
-}
+  .nav-button {
+    flex: none;
+    padding: 14px 18px;
+    font-size: 14px;
+    flex-direction: row;
+    gap: 10px;
+    border-radius: 16px;
+    border: 1px solid transparent;
+    background: #f8fafb;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  }
 
-// ── Import Result (from excelImport.ts) ───────────────────────
-export interface ImportResult {
-  child: Partial<Child>
-  siblings: Partial<Sibling>[]
-  followups: Partial<AnnualFollowup>[]
-  errors: ImportError[]
-  warnings: ImportWarning[]
-  unmapped_fields: Record<string, unknown>  // fields found but not mapped
-  source_file: string
-  detected_type: ChildType | null
-}
+  .nav-button.nav-active {
+    background: #e7f5ef;
+    border-color: #1a6b4a;
+    color: #1a6b4a;
+  }
 
-export interface ImportError {
-  field: string
-  message: string
-  value?: unknown
-}
+  .nav-button:hover {
+    background: #f2f6f8;
+  }
 
-export interface ImportWarning {
-  field: string
-  message: string
-  value?: unknown
-}
+  body {
+    background: #f0f4f2;
+  }
 
-// ── Form types ────────────────────────────────────────────────
-export type ChildFormData = Omit<Child,
-  'id' | 'created_at' | 'updated_at' | 'is_active' |
-  'followups' | 'siblings' | 'academic_records' |
-  'sponsors' | 'gifts' | 'documents' | 'alumni_tracking' | 'change_log'
->
-
-export type FollowupFormData = Omit<AnnualFollowup,
-  'id' | 'child_id' | 'created_at' | 'updated_at'
->
-
-export interface ChildFilter {
-  search: string
-  child_type: ChildType | ''
-  lifecycle_status: LifecycleStatus | ''
-  father_status: string
-  dv_reported: boolean | null
-  category: string
-  followup_due: boolean | null
-  area: string
-  class_name: string
+  .mobile-header,
+  .mobile-only {
+    display: none !important;
+  }
 }

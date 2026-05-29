@@ -1,7 +1,7 @@
 // src/pages/ChildrenListPage.tsx
 // Reads from Supabase (source of truth), caches to Dexie for offline
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { db } from '@/lib/db'
 import type { Child } from '@/types'
@@ -16,6 +16,17 @@ const FILTERS = [
   { id: 'deceased',  label: 'Father Deceased' },
   { id: 'alcoholic', label: 'Alcoholic' },
 ]
+
+const FILTER_LABELS: Record<string, string> = {
+  active: 'Active Students', past: 'Past Students', college: 'College Bound',
+  external: 'External Students', special_needs: 'Special Needs',
+  gifts_received: 'Received Gifts', no_gifts: 'No Gifts Yet',
+  underweight: 'Underweight', malnourished: 'Malnourished',
+  both_parents: 'Both Parents Alive', single_parent: 'Single Parent',
+  father_alive: 'Father Alive', mother_alive: 'Mother Alive',
+  working_parents: 'Working Parents', in_debt: 'Families in Debt',
+  life_skills: 'Life Skills Trained', category: 'Category', education: 'Education',
+}
 
 function Tag({ value, type }: { value: string; type: 'r'|'g'|'a'|'b'|'p' }) {
   const c = { r:['#fcebeb','#a32d2d'], g:['#eaf3de','#3b6d11'], a:['#faeeda','#854f0b'], b:['#e6f1fb','#185fa5'], p:['#eeedfe','#3c3489'] }[type]
@@ -61,10 +72,14 @@ function ChildCard({ child }: { child: Child }) {
 
 export default function ChildrenListPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const urlFilter = searchParams.get('filter') || 'all'
+  const urlValue  = searchParams.get('value')  || ''
   const [children, setChildren] = useState<Child[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch]   = useState('')
-  const [activeFilter, setActiveFilter] = useState('all')
+  const [activeFilter, setActiveFilter] = useState(urlFilter)
+  const [filterValue, setFilterValue]   = useState(urlValue)
   const [syncing, setSyncing] = useState(false)
 
   const loadChildren = useCallback(async (showSyncing = false) => {
@@ -108,11 +123,26 @@ export default function ChildrenListPage() {
       (c.mother_name?.toLowerCase() || '').includes(q)
 
     const matchFilter =
-      activeFilter === 'all'       ? true :
-      activeFilter === 'dv'        ? (c.father_dv || !!c.mother_dv) :
-      activeFilter === 'abandoned' ? c.father_status === 'Abandoned' :
-      activeFilter === 'deceased'  ? c.father_status === 'Dead' :
-      activeFilter === 'alcoholic' ? (c.father_habits?.toLowerCase().includes('alcohol') || c.father_habits?.toLowerCase().includes('drink') || false) :
+      activeFilter === 'all'           ? true :
+      activeFilter === 'dv'            ? (c.father_dv || !!c.mother_dv) :
+      activeFilter === 'abandoned'     ? c.father_status === 'Abandoned' :
+      activeFilter === 'deceased'      ? c.father_status === 'Dead' :
+      activeFilter === 'alcoholic'     ? (c.father_habits?.toLowerCase().includes('alcohol') || c.father_habits?.toLowerCase().includes('drink') || false) :
+      activeFilter === 'active'        ? !!c.is_active :
+      activeFilter === 'past'          ? (c as any).lifecycle_status === 'past' || (c as any).data_json?.student_status === 'Past Student' :
+      activeFilter === 'college'       ? (c as any).lifecycle_status === 'college' || (c as any).data_json?.student_status === 'College' :
+      activeFilter === 'external'      ? c.child_type === 'sponsored_external' || (c as any).data_json?.student_status === 'External' :
+      activeFilter === 'special_needs' ? c.normal_or_special === 'Special' :
+      activeFilter === 'underweight'   ? (!!c.height_cm && !!c.weight_kg && (c.weight_kg / ((c.height_cm / 100) ** 2)) < 18.5) :
+      activeFilter === 'malnourished'  ? (c.weight_kg != null && c.weight_kg < 30) :
+      activeFilter === 'both_parents'  ? (c.father_status === 'Alive' && c.mother_status === 'Alive') :
+      activeFilter === 'single_parent' ? (c.father_status !== 'Alive' || c.mother_status !== 'Alive') :
+      activeFilter === 'father_alive'  ? c.father_status === 'Alive' :
+      activeFilter === 'mother_alive'  ? c.mother_status === 'Alive' :
+      activeFilter === 'working_parents' ? ((c.father_occupation && c.father_occupation !== 'Unemployed') || (c.mother_occupation && c.mother_occupation !== 'Unemployed')) :
+      activeFilter === 'in_debt'       ? (!!c.debts && c.debts !== '') :
+      activeFilter === 'category'      ? c.category === filterValue :
+      activeFilter === 'education'     ? c.father_education === filterValue :
       true
 
     return matchSearch && matchFilter
@@ -174,7 +204,7 @@ export default function ChildrenListPage() {
       {/* Filter pills */}
       <div style={{ display:'flex', gap:6, padding:'8px 14px', overflowX:'auto', scrollbarWidth:'none' as const }}>
         {FILTERS.map(f => (
-          <button key={f.id} onClick={() => setActiveFilter(f.id)}
+          <button key={f.id} onClick={() => { setActiveFilter(f.id); setFilterValue('') }}
             style={{ whiteSpace:'nowrap', padding:'4px 12px', borderRadius:20, fontSize:11,
               border:'0.5px solid', cursor:'pointer', fontFamily:'inherit',
               background: activeFilter===f.id ? G : '#fff',
@@ -183,6 +213,14 @@ export default function ChildrenListPage() {
             {f.label} ({filterCounts[f.id]})
           </button>
         ))}
+        {!FILTERS.some(f => f.id === activeFilter) && activeFilter !== 'all' && (
+          <button onClick={() => { setActiveFilter('all'); setFilterValue('') }}
+            style={{ whiteSpace:'nowrap', padding:'4px 12px', borderRadius:20, fontSize:11,
+              border:'0.5px solid #1a6b4a', cursor:'pointer', fontFamily:'inherit',
+              background: G, color:'#fff', display:'flex', alignItems:'center', gap:4 }}>
+            {FILTER_LABELS[activeFilter] || activeFilter}{filterValue ? `: ${filterValue}` : ''} ×
+          </button>
+        )}
       </div>
 
       {/* List */}
