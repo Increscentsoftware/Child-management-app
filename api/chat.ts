@@ -119,37 +119,41 @@ export default async function handler(req: any, res: any) {
   const { messages } = req.body ?? {}
   if (!Array.isArray(messages)) return res.status(400).json({ error: 'messages must be an array' })
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'API key not configured' })
 
+  // Map messages to Gemini format (role: 'model' instead of 'assistant')
+  const contents = messages.map((m: { role: string; content: string }) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }))
+
   try {
-    const upstream = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        max_tokens: 1024,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          ...messages,
-        ],
-      }),
-    })
+    const upstream = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents,
+          generationConfig: { maxOutputTokens: 1024 },
+        }),
+      }
+    )
 
     const data = await upstream.json() as {
-      choices?: Array<{ message: { content: string } }>
+      candidates?: Array<{ content: { parts: Array<{ text: string }> } }>
       error?: { message: string }
     }
 
     if (!upstream.ok) {
-      console.error('OpenAI error:', data.error)
+      console.error('Gemini error:', data.error)
       return res.status(502).json({ error: data.error?.message || 'Upstream error' })
     }
 
-    return res.status(200).json({ content: data.choices?.[0]?.message?.content ?? '' })
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    return res.status(200).json({ content: text })
   } catch (err) {
     console.error('Chat handler error:', err)
     return res.status(500).json({ error: 'Internal error' })
